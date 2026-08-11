@@ -5,48 +5,101 @@
   <link rel="stylesheet" href="popup.css" />
 </head>
 <body>
-  <header>
-    <h1>K2 Multi-Session</h1>
-    <button id="settings-toggle" class="icon" title="Settings">&#9881;</button>
-  </header>
+  <nav class="tabs">
+    <span id="nav-title" class="nav-title" hidden>Settings</span>
+    <select id="domain-select" class="domain-select" aria-label="Site"></select>
+    <span id="domain-empty" class="tabs-empty" hidden>No site configured</span>
+    <button id="settings-toggle" class="icon-btn" title="Settings" aria-label="Settings">&#9881;</button>
+  </nav>
 
-  <section id="settings" hidden>
-    <label for="domains">Site domains <span class="hint">one per line</span></label>
-    <textarea id="domains" rows="3" placeholder="k2.mycompany.com" spellcheck="false"></textarea>
-    <label class="checkbox">
-      <input type="checkbox" id="preemptive" />
-      Send credentials pre-emptively
-    </label>
-    <p class="hint">
-      Basic-auth sites only. Leave off for NTLM/Negotiate — an unsolicited
-      Authorization header breaks the handshake and the login will fail.
-    </p>
-    <button id="reset-auth" class="ghost full">Clear auth cache now</button>
-    <p class="hint" id="reset-hint">
-      Switching sessions already does this. Other sites' cookies are saved and restored,
-      so you stay logged in everywhere else.
-    </p>
-  </section>
+  <div class="content">
+    <section id="settings" class="box" hidden>
+      <label for="domain-input">Site domains</label>
+      <ul id="domain-chips" class="chips"></ul>
+      <div class="domain-entry">
+        <input type="text" id="domain-input" placeholder="k2.mycompany.com"
+               spellcheck="false" autocapitalize="off" />
+        <button type="button" id="use-current" class="btn">This site</button>
+      </div>
+      <div id="detected" class="detected" hidden
+           title="This site showed a credential prompt, but it isn't in your domain list, so the extension ignored it. Add it to manage users there.">
+        <div class="label">Prompted for a password, not managed here</div>
+        <div class="detected-row">
+          <span id="detected-host"></span>
+          <button type="button" id="detected-add" class="btn">Add</button>
+        </div>
+      </div>
 
-  <div id="scheme-note" class="note" hidden></div>
-  <div id="no-domain" class="note warn" hidden>Set a site domain in settings (&#9881;) to get started.</div>
+      <label class="check"
+             title="Attaches an Authorization: Basic header to every request. Basic auth only — an unsolicited header breaks the NTLM/Negotiate handshake and login will fail.">
+        <input type="checkbox" id="preemptive" />
+        <span>Pre-emptive credentials</span>
+        <span class="hint">Basic only</span>
+      </label>
 
-  <ul id="sessions"></ul>
+      <p id="scheme-note" class="msg" hidden></p>
 
-  <section id="add">
-    <button id="add-toggle" class="ghost">+ Add session</button>
-    <form id="add-form" hidden autocomplete="off">
-      <input type="text" id="name" placeholder="Label (e.g. Approver)" required />
+      <button id="reset-auth" class="btn"
+              title="Switching users already does this. Cookies for every other site are saved and restored.">Clear cached sign-ins</button>
+      <p class="hint" id="reset-hint">Other sites stay signed in.</p>
+
+      <div class="label sub-head">Backup</div>
+      <div class="form-actions">
+        <button type="button" id="export-btn" class="btn">Export…</button>
+        <button type="button" id="import-btn" class="btn">Import…</button>
+      </div>
+      <input type="file" id="import-file" accept=".json,application/json" hidden />
+
+      <form id="export-form" class="sub-form" hidden>
+        <input type="password" id="export-pass"
+               placeholder="Passphrase — blank means no encryption" />
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Download</button>
+          <button type="button" id="export-cancel" class="btn">Cancel</button>
+        </div>
+      </form>
+
+      <form id="import-form" class="sub-form" hidden>
+        <input type="password" id="import-pass" placeholder="Passphrase for this file" />
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Import</button>
+          <button type="button" id="import-cancel" class="btn">Cancel</button>
+        </div>
+      </form>
+
+      <p class="hint" id="backup-status">Users and domains only. Passwords are included.</p>
+    </section>
+
+    <p id="no-domain" class="msg" hidden>Add your site domain in settings &#9881;</p>
+
+    <section id="active-block" class="active">
+      <div class="active-head">
+        <span class="label">Signed in as</span>
+        <button type="button" id="active-edit" class="icon-btn" title="Edit this user"
+                aria-label="Edit this user" hidden>&#9998;</button>
+      </div>
+      <div class="active-name" id="active-name">Nobody</div>
+      <div class="active-user" id="active-user">Pick a user below</div>
+    </section>
+
+    <div class="label" id="rack-label">Switch to</div>
+    <ul id="sessions" class="rows"></ul>
+
+    <button id="add-toggle" class="btn btn-wide">Add user</button>
+
+    <form id="add-form" class="box" hidden autocomplete="off">
+      <div class="label" id="form-title">Add user</div>
+      <input type="text" id="name" placeholder="Label, e.g. Approver" required />
       <input type="text" id="username" placeholder="Username or DOMAIN\user" required />
       <input type="password" id="password" placeholder="Password" required />
-      <div class="row">
-        <button type="submit">Save</button>
-        <button type="button" id="add-cancel" class="ghost">Cancel</button>
+      <div class="form-actions">
+        <button type="submit" id="form-submit" class="btn btn-primary">Save user</button>
+        <button type="button" id="add-cancel" class="btn">Cancel</button>
       </div>
     </form>
-  </section>
 
-  <footer>Credentials are stored unencrypted in local extension storage. QA accounts only.</footer>
+    <footer id="status-bar" title="Passwords are stored unencrypted in this extension's local storage. QA accounts only."></footer>
+  </div>
 
   <script src="popup.js" type="module"></script>
 </body>

@@ -9,6 +9,7 @@
     "tabs",
     "cookies",
     "browsingData",
+    "unlimitedStorage",
     "webRequest",
     "webRequestAuthProvider",
     "declarativeNetRequest"

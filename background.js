@@ -7,6 +7,8 @@
 //   2. webRequest.onAuthRequired answers any challenge that still gets through
 //      (Digest and NTLM cannot be pre-empted with a static header).
 
+import { STORAGE_DEFAULTS, SNAPSHOT_KEY } from "./storage.js";
+
 const ALL_RESOURCE_TYPES = [
   "main_frame", "sub_frame", "stylesheet", "script", "image", "font",
   "object", "xmlhttprequest", "ping", "csp_report", "media", "websocket", "other"
@@ -14,10 +16,30 @@ const ALL_RESOURCE_TYPES = [
 
 // preemptive defaults off: it only suits Basic auth, and sending an unsolicited
 // Authorization header breaks NTLM/Negotiate sites outright.
-const DEFAULTS = { sessions: [], domains: [], activeSessionId: null, preemptive: false };
+// v1 stored a flat session list with one global activeSessionId.
+async function migrate() {
+  const stored = await chrome.storage.local.get(["sessions", "domains", "activeSessionId"]);
+  const sessions = stored.sessions ?? [];
+  if (stored.activeSessionId === undefined && sessions.every((s) => s.domain)) return;
+
+  const home = stored.domains?.[0] ?? null;
+  const activeByDomain = (await chrome.storage.local.get({ activeByDomain: {} })).activeByDomain;
+  if (stored.activeSessionId && home) activeByDomain[home] ??= stored.activeSessionId;
+
+  await chrome.storage.local.set({
+    sessions: sessions.map((s) => ({ ...s, domain: s.domain ?? home })),
+    activeByDomain
+  });
+  await chrome.storage.local.remove("activeSessionId");
+}
+
+function domainForHost(host, domains) {
+  const h = host.toLowerCase();
+  return domains.find((d) => h === d || h.endsWith("." + d)) ?? null;
+}
 
 async function getConfig() {
-  const local = await chrome.storage.local.get(DEFAULTS);
+  const local = await chrome.storage.local.get(STORAGE_DEFAULTS);
   const { tabAssignments = {} } = await chrome.storage.session.get("tabAssignments");
   return { ...local, tabAssignments };
 }
@@ -44,7 +66,7 @@ function authRule(id, priority, session, domains, condExtra) {
 
 // Rebuilds the full session-rule set from scratch. Cheap, and avoids drift.
 async function syncRules() {
-  const { sessions, domains, activeSessionId, tabAssignments, preemptive } = await getConfig();
+  const { sessions, domains, activeByDomain, tabAssignments, preemptive } = await getConfig();
   const existing = await chrome.declarativeNetRequest.getSessionRules();
   const removeRuleIds = existing.map((r) => r.id);
   const addRules = [];
@@ -56,16 +78,17 @@ async function syncRules() {
 
     for (const [tabId, sessionId] of Object.entries(tabAssignments)) {
       const session = byId.get(sessionId);
-      if (!session) continue;
+      if (!session?.domain) continue;
       assignedTabIds.push(Number(tabId));
-      addRules.push(authRule(id++, 2, session, domains, { tabIds: [Number(tabId)] }));
+      addRules.push(authRule(id++, 2, session, [session.domain], { tabIds: [Number(tabId)] }));
     }
 
-    const active = byId.get(activeSessionId);
-    if (active) {
-      // Everything not explicitly pinned to a tab uses the active session.
+    // One rule per domain, each carrying that domain's own signed-in user.
+    for (const domain of domains) {
+      const active = byId.get(activeByDomain[domain]);
+      if (!active) continue;
       const extra = assignedTabIds.length ? { excludedTabIds: assignedTabIds } : {};
-      addRules.push(authRule(id++, 1, active, domains, extra));
+      addRules.push(authRule(id++, 1, active, [domain], extra));
     }
   }
 
@@ -82,13 +105,35 @@ async function syncRules() {
 
 // ---- Challenge fallback (Digest / NTLM / anything not pre-empted) -----------
 
-const attempted = new Set(); // requestIds we have already answered once
+// Tracks requestIds we have already answered once. Held in storage.session rather than
+// module scope: MV3 terminates the worker aggressively, and losing this mid-handshake
+// would let us re-answer with the same rejected password in a loop.
+async function alreadyAttempted(requestId) {
+  const { authAttempts = {} } = await chrome.storage.session.get("authAttempts");
+  const now = Date.now();
+  for (const [id, ts] of Object.entries(authAttempts)) {
+    if (now - ts > 60_000) delete authAttempts[id];
+  }
+  const seen = authAttempts[requestId] !== undefined;
+  authAttempts[requestId] = now;
+  await chrome.storage.session.set({ authAttempts });
+  return seen;
+}
+
+// Most-recent-first list of hosts that challenged us while out of scope, offered in the
+// popup as a one-click way to configure the domain. Capped so it stays a suggestion.
+async function noteChallenge(host) {
+  const { seenChallenges = [] } = await chrome.storage.local.get("seenChallenges");
+  if (seenChallenges[0] === host) return;
+  const next = [host, ...seenChallenges.filter((h) => h !== host)].slice(0, 3);
+  await chrome.storage.local.set({ seenChallenges: next });
+}
 
 chrome.webRequest.onAuthRequired.addListener(
   async (details, callback) => {
     if (details.isProxy) return callback({});
 
-    const { sessions, domains, activeSessionId, tabAssignments } = await getConfig();
+    const { sessions, domains, activeByDomain, tabAssignments } = await getConfig();
 
     // Record the scheme so the popup can tell the user what they're actually up against.
     if (details.scheme) {
@@ -101,16 +146,19 @@ chrome.webRequest.onAuthRequired.addListener(
     } catch {
       return callback({});
     }
-    const inScope = domains.some((d) => host === d || host.endsWith("." + d));
-    if (!inScope) return callback({});
+    const domain = domainForHost(host, domains);
+    if (!domain) {
+      // We know exactly which host is asking for credentials, so the popup can offer it
+      // rather than making the user type a domain correctly from memory.
+      await noteChallenge(host);
+      return callback({});
+    }
 
     // Answering the same request twice means the credentials were rejected.
     // Let the native dialog appear rather than looping.
-    if (attempted.has(details.requestId)) return callback({});
-    attempted.add(details.requestId);
-    setTimeout(() => attempted.delete(details.requestId), 60_000);
+    if (await alreadyAttempted(details.requestId)) return callback({});
 
-    const sessionId = tabAssignments[details.tabId] ?? activeSessionId;
+    const sessionId = tabAssignments[details.tabId] ?? activeByDomain[domain];
     const session = sessions.find((s) => s.id === sessionId);
     if (!session) return callback({});
 
@@ -159,6 +207,33 @@ function toSetDetails(c) {
   return details;
 }
 
+const MAX_RESTORE_ATTEMPTS = 3;
+
+// Writes back whatever is left in the persisted snapshot. Idempotent: re-setting a cookie
+// that already exists is a harmless overwrite, so running this twice costs nothing.
+// Only cookies that still failed are kept, so retries shrink monotonically.
+async function restoreSnapshot() {
+  const { [SNAPSHOT_KEY]: snap } = await chrome.storage.local.get(SNAPSHOT_KEY);
+  if (!snap?.cookies?.length) {
+    if (snap) await chrome.storage.local.remove(SNAPSHOT_KEY);
+    return { restored: 0, lost: 0 };
+  }
+
+  const attempts = (snap.attempts ?? 0) + 1;
+  const results = await Promise.allSettled(snap.cookies.map((d) => chrome.cookies.set(d)));
+  const failed = snap.cookies.filter(
+    (_, i) => results[i].status === "rejected" || !results[i].value
+  );
+
+  if (failed.length && attempts < MAX_RESTORE_ATTEMPTS) {
+    await chrome.storage.local.set({ [SNAPSHOT_KEY]: { cookies: failed, attempts } });
+  } else {
+    // Give up rather than retry a permanently invalid cookie on every startup forever.
+    await chrome.storage.local.remove(SNAPSHOT_KEY);
+  }
+  return { restored: snap.cookies.length - failed.length, lost: failed.length };
+}
+
 // Chrome exposes no origin-scoped way to drop the HTTP auth cache — clearing cookies
 // globally is the only lever. So we snapshot every out-of-scope cookie first and write
 // it back afterwards, which keeps the user logged into every other site.
@@ -168,16 +243,26 @@ async function clearAuthCache(domains) {
     const all = await chrome.cookies.getAll({});
     preserved = all.filter((c) => !hostInScope(c.domain, domains)).map(toSetDetails);
   } catch (e) {
-    console.warn("cookie snapshot failed, skipping restore", e);
+    console.warn("cookie snapshot failed, skipping clear to avoid data loss", e);
+    return;
+  }
+
+  // Persist before the destructive step. If the worker is terminated between the clear
+  // and the restore, the next spin-up picks the snapshot back up instead of losing every
+  // login. If this write fails we must NOT clear — there would be no way back.
+  try {
+    await chrome.storage.local.set({ [SNAPSHOT_KEY]: { cookies: preserved, attempts: 0 } });
+  } catch (e) {
+    await chrome.storage.local.set({
+      lastReset: { at: Date.now(), restored: 0, lost: 0, aborted: String(e.message ?? e) }
+    });
+    return;
   }
 
   await chrome.browsingData.remove({}, { cookies: true });
 
-  const results = await Promise.allSettled(preserved.map((d) => chrome.cookies.set(d)));
-  const lost = results.filter((r) => r.status === "rejected" || !r.value).length;
-  await chrome.storage.local.set({
-    lastReset: { at: Date.now(), restored: preserved.length - lost, lost }
-  });
+  const { restored, lost } = await restoreSnapshot();
+  await chrome.storage.local.set({ lastReset: { at: Date.now(), restored, lost } });
 }
 
 async function clearSiteState(domains) {
@@ -197,12 +282,19 @@ async function reloadTabsIn(domains) {
 // Switching always drops the auth cache — that is the whole point of the extension, and
 // with cookie preservation it is cheap enough to do unconditionally.
 async function switchTo(sessionId) {
-  const { domains } = await getConfig();
-  await chrome.storage.local.set({ activeSessionId: sessionId });
+  const { sessions, activeByDomain } = await getConfig();
+  const session = sessions.find((s) => s.id === sessionId);
+  if (!session?.domain) return;
+
+  // Scoped to this user's own domain, so other environments keep their sessions.
+  const scope = [session.domain];
+  await chrome.storage.local.set({
+    activeByDomain: { ...activeByDomain, [session.domain]: sessionId }
+  });
   await syncRules();
-  await clearSiteState(domains);
-  await clearAuthCache(domains);
-  await reloadTabsIn(domains);
+  await clearSiteState(scope);
+  await clearAuthCache(scope);
+  await reloadTabsIn(scope);
 }
 
 async function resetAuth() {
@@ -248,3 +340,10 @@ chrome.storage.local.onChanged.addListener((changes) => {
 
 chrome.runtime.onInstalled.addListener(syncRules);
 chrome.runtime.onStartup.addListener(syncRules);
+
+// Runs on every worker spin-up, not just browser start: if a previous clear was cut short
+// by the worker being terminated, restoreSnapshot is what puts the cookies back.
+migrate()
+  .then(syncRules)
+  .then(restoreSnapshot)
+  .catch((e) => console.warn("startup recovery failed", e));

@@ -1,0 +1,11 @@
+node_modules/
+
+# Local test suite
+test/
+
+# Codemap staleness tracker
+.codemap-dirty
+
+# Exported backups contain QA passwords in the clear when no passphrase is set.
+# Never commit one.
+k2-users-*.json

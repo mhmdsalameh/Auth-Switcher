@@ -38,6 +38,38 @@ Gmail, Jira, and everything else.
 The settings panel reports how many cookies were restored after each clear. A small number
 can fail to restore (unusual attribute combinations); those sites need a re-login.
 
+The snapshot is written to `storage.local` **before** the clear, so if Chrome terminates
+the service worker mid-operation the cookies are restored on the next spin-up rather than
+lost. If the snapshot cannot be written at all, the clear is abandoned instead of leaving
+you with no way back.
+
+## Moving to another browser or laptop
+
+Settings &#9881; → **Backup**.
+
+- **Export…** asks for a passphrase and downloads `k2-users-YYYY-MM-DD.json`. With a
+  passphrase the file is AES-256-GCM encrypted, key derived by PBKDF2-SHA256 (250k
+  iterations, random salt) — safe to send over email, Teams or a USB stick. Leave the
+  passphrase blank and **the file contains your passwords in plain text**.
+- **Import…** merges rather than replaces. A user already present for the same domain and
+  username is skipped and never overwritten, so re-importing the same file is harmless.
+
+Ids are regenerated on import, and domains from the file are added to your list. Only
+users and domains travel — not the auth cache or per-tab pins, which are machine-specific.
+
+Remember unpacked extensions key their storage to the folder path, so an export is also
+the only way to survive moving this folder.
+
+## Tests
+
+```
+npm test
+```
+
+Runs a static wiring check plus a suite that executes `background.js` in a VM with stubbed
+Chrome APIs, covering the destructive cookie path: crash recovery, the retry cap, the
+abort-on-unwritable-snapshot guard, and hostOnly/SameSite round-tripping.
+
 ## Install
 
 1. `chrome://extensions` → enable **Developer mode**
@@ -46,10 +78,15 @@ can fail to restore (unusual attribute combinations); those sites need a re-logi
 
 ## Setup
 
-1. Click the extension → gear icon → enter your site domain (e.g. `k2.mycompany.com`),
-   one per line. Subdomains are included automatically.
-2. **+ Add session** for each test user.
-3. Click any session to switch to it.
+1. Open K2 once and let the sign-in prompt appear, then click the extension → gear icon.
+   The host that asked for credentials is offered there — click **Add**. Failing that, use
+   **This site** to take the current tab's domain, or type it. Subdomains are included
+   automatically.
+2. **Add user** for each test account. Users belong to the domain tab that's selected.
+3. Click any user to switch to them.
+
+Each domain gets its own tab and its own set of users, and tracks its own signed-in user.
+Switching on UAT clears and reloads only UAT — your DEV and PROD sessions are untouched.
 
 ## Which scheme am I on?
 

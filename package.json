@@ -1,0 +1,9 @@
+{
+  "name": "k2-multi-session",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --check background.js && node --check popup.js && node --check backup.js && node --check storage.js && node test/wiring.test.mjs && node test/backup.test.mjs && node test/background.test.mjs"
+  }
+}
