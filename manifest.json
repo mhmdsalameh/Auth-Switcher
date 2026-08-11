@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "K2 Multi-Session",
+  "version": "1.0.0",
+  "description": "Switch between multiple HTTP-auth logins on the same site without restarting Chrome.",
+  "minimum_chrome_version": "116",
+  "permissions": [
+    "storage",
+    "tabs",
+    "cookies",
+    "browsingData",
+    "webRequest",
+    "webRequestAuthProvider",
+    "declarativeNetRequest"
+  ],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "K2 Multi-Session"
+  }
+}

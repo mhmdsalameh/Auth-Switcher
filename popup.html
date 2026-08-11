@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header>
+    <h1>K2 Multi-Session</h1>
+    <button id="settings-toggle" class="icon" title="Settings">&#9881;</button>
+  </header>
+
+  <section id="settings" hidden>
+    <label for="domains">Site domains <span class="hint">one per line</span></label>
+    <textarea id="domains" rows="3" placeholder="k2.mycompany.com" spellcheck="false"></textarea>
+    <label class="checkbox">
+      <input type="checkbox" id="preemptive" />
+      Send credentials pre-emptively
+    </label>
+    <p class="hint">
+      Basic-auth sites only. Leave off for NTLM/Negotiate — an unsolicited
+      Authorization header breaks the handshake and the login will fail.
+    </p>
+    <button id="reset-auth" class="ghost full">Clear auth cache now</button>
+    <p class="hint" id="reset-hint">
+      Switching sessions already does this. Other sites' cookies are saved and restored,
+      so you stay logged in everywhere else.
+    </p>
+  </section>
+
+  <div id="scheme-note" class="note" hidden></div>
+  <div id="no-domain" class="note warn" hidden>Set a site domain in settings (&#9881;) to get started.</div>
+
+  <ul id="sessions"></ul>
+
+  <section id="add">
+    <button id="add-toggle" class="ghost">+ Add session</button>
+    <form id="add-form" hidden autocomplete="off">
+      <input type="text" id="name" placeholder="Label (e.g. Approver)" required />
+      <input type="text" id="username" placeholder="Username or DOMAIN\user" required />
+      <input type="password" id="password" placeholder="Password" required />
+      <div class="row">
+        <button type="submit">Save</button>
+        <button type="button" id="add-cancel" class="ghost">Cancel</button>
+      </div>
+    </form>
+  </section>
+
+  <footer>Credentials are stored unencrypted in local extension storage. QA accounts only.</footer>
+
+  <script src="popup.js" type="module"></script>
+</body>
+</html>
