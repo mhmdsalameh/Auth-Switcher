@@ -8,6 +8,10 @@ const PALETTE = ["#e0a33e", "#4a9eff", "#5bbd7a", "#d47ba8", "#a98cf0", "#e0705c
 // Copied, not aliased — render() reads state constantly and must never mutate the shared shape.
 let state = { ...STORAGE_DEFAULTS };
 
+// Search is deliberately not persisted: a filter left over from last time would hide users.
+const SEARCH_MIN = 5; // only worth the clutter once the list scans badly
+let query = "";
+
 const send = (msg) => chrome.runtime.sendMessage(msg);
 
 function userColor(session) {
@@ -48,6 +52,7 @@ async function load() {
 }
 
 async function selectDomain(domain) {
+  query = ""; // a filter carried across domains would look like missing users
   await chrome.storage.local.set({ selectedDomain: domain });
   await load();
 }
@@ -238,7 +243,7 @@ function render() {
   $("#preemptive").checked = state.preemptive;
   $("#no-domain").hidden = settingsOpen || state.domains.length > 0;
   $("#active-block").hidden = settingsOpen || !domain;
-  $("#rack-label").hidden = settingsOpen || !domain;
+  $("#rack-head").hidden = settingsOpen || !domain;
   $("#add-form").hidden = settingsOpen || !formOpen;
   $("#add-toggle").hidden = settingsOpen || !domain || formOpen;
   $("#status-bar").hidden = settingsOpen;
@@ -274,6 +279,21 @@ function render() {
   rows.textContent = "";
   const others = mine.filter((s) => s.id !== active?.id);
 
+  // Resolve the search field first: it can clear the query, and the list below must
+  // reflect that in the same pass. Visibility keys off the *unfiltered* count, so the
+  // field can't vanish out from under someone mid-search.
+  const search = $("#user-search");
+  search.hidden = settingsOpen || !domain || others.length < SEARCH_MIN;
+  if (search.hidden) query = "";
+  if (search.value !== query) search.value = query;
+
+  const q = query.trim().toLowerCase();
+  const matches = q
+    ? others.filter(
+        (s) => s.name.toLowerCase().includes(q) || s.username.toLowerCase().includes(q)
+      )
+    : others;
+
   if (settingsOpen || !domain) {
     rows.hidden = true;
   } else {
@@ -285,8 +305,14 @@ function render() {
         ? "Add another user to switch between them."
         : `No users for ${domain} yet.`;
       rows.append(li);
+    } else if (!matches.length) {
+      const li = document.createElement("li");
+      li.className = "rows-empty";
+      // "other" matters: the signed-in user is deliberately not in this list.
+      li.textContent = `No other users match "${query.trim()}".`;
+      rows.append(li);
     } else {
-      others.forEach((s) => rows.append(buildRow(s)));
+      matches.forEach((s) => rows.append(buildRow(s)));
     }
   }
 
@@ -309,6 +335,18 @@ async function targetUrl() {
 // ---- wiring ----------------------------------------------------------------
 
 $("#domain-select").addEventListener("change", (e) => selectDomain(e.target.value));
+
+$("#user-search").addEventListener("input", (e) => {
+  query = e.target.value;
+  render();
+});
+
+$("#user-search").addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || !query) return;
+  e.preventDefault(); // don't let Escape close the popup with a filter still applied
+  query = "";
+  render();
+});
 
 $("#settings-toggle").addEventListener("click", () => {
   settingsOpen = !settingsOpen;

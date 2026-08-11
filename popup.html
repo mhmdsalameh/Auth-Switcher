@@ -82,7 +82,11 @@
       <div class="active-user" id="active-user">Pick a user below</div>
     </section>
 
-    <div class="label" id="rack-label">Switch to</div>
+    <div class="rack-head" id="rack-head">
+      <span class="label" id="rack-label">Switch to</span>
+      <input type="search" id="user-search" class="user-search"
+             placeholder="Search" aria-label="Search users" spellcheck="false" hidden />
+    </div>
     <ul id="sessions" class="rows"></ul>
 
     <button id="add-toggle" class="btn btn-wide">Add user</button>

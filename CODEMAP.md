@@ -73,12 +73,12 @@ including tests.
 
 | File | Line | What it is |
 |------|------|------------|
-| `popup.js` | 218 | `render()` — single render entry, called only from `load()` |
-| `popup.js` | 55 | `renderDomainPicker()` — domain dropdown |
-| `popup.js` | 75 | `renderDomains()` — domain chips + detected-host suggestion |
-| `popup.js` | 123 | `buildRow()` — one user row with edit/open/delete |
-| `popup.js` | 198 | `openUserForm()` — shared add/edit form |
-| `popup.js` | 38 | `currentDomain()` — selected tab, falling back to first domain |
+| `popup.js` | 223 | `render()` — single render entry, called only from `load()` |
+| `popup.js` | 60 | `renderDomainPicker()` — domain dropdown |
+| `popup.js` | 80 | `renderDomains()` — domain chips + detected-host suggestion |
+| `popup.js` | 128 | `buildRow()` — one user row with edit/open/delete |
+| `popup.js` | 203 | `openUserForm()` — shared add/edit form |
+| `popup.js` | 42 | `currentDomain()` — selected tab, falling back to first domain |
 | `popup.html` | 1 | Popup markup |
 | `popup.css` | 10 | Styles; the --user custom property is set per active user from JS |
 
@@ -105,7 +105,7 @@ including tests.
 | `background.js` | 41 | `getConfig()` — reads local + session storage together |
 | `background.js` | 20 | `migrate()` — v1 (flat sessions) → v2 (per-domain) |
 | `background.js` | 179 | `hostInScope()` — domain matching, used by cookie filtering |
-| `popup.js` | 21 | `normalizeDomain()` — strips scheme/path/port, lowercases |
+| `popup.js` | 25 | `normalizeDomain()` — strips scheme/path/port, lowercases |
 | `popup.js` | 6 | `PALETTE` — per-user colours |
 | `manifest.json` | 1 | Permissions and entry points |
 
@@ -119,7 +119,7 @@ including tests.
 | Browser start / extension install | `background.js` | 341 |
 | Auth challenge from any site | `background.js` | 132 |
 | Message from popup | `background.js` | 316 |
-| Popup opened | `popup.js` | 518 |
+| Popup opened | `popup.js` | 556 |
 
 ---
 
@@ -153,9 +153,9 @@ adding it there; `test/wiring.test.mjs` fails if the popup sends something unhan
 
 | Message | Sent from | Handled at |
 |---------|-----------|------------|
-| `{type:"switch", sessionId}` | `popup.js:147` | `background.js:318` |
-| `{type:"openAs", sessionId, url}` | `popup.js:169` | `background.js:320` |
-| `{type:"resetAuth"}` | `popup.js:359` | `background.js:319` |
+| `{type:"switch", sessionId}` | `popup.js:152` | `background.js:318` |
+| `{type:"openAs", sessionId, url}` | `popup.js:174` | `background.js:320` |
+| `{type:"resetAuth"}` | `popup.js:397` | `background.js:319` |
 
 ### Popup → backup module
 
@@ -204,7 +204,7 @@ adding it there; `test/wiring.test.mjs` fails if the popup sends something unhan
 #### `switchTo(sessionId)`
 - **Defined**: `background.js:284`
 - **Impact**: high — the extension's main action
-- **Called by**: message handler (321) ← `popup.js:147`
+- **Called by**: message handler (321) ← `popup.js:152`
 - **Calls**: `getConfig` (288), `syncRules` (297), `clearSiteState` (298), `clearAuthCache` (299), `reloadTabsIn` (300)
 - **Side effects**: writes `activeByDomain`; clears cookies; reloads tabs
 - **Change note**: scoped to `session.domain` only. Widening that scope would break the guarantee that switching on UAT leaves DEV signed in — covered by a test.
@@ -226,7 +226,7 @@ adding it there; `test/wiring.test.mjs` fails if the popup sends something unhan
 ### Popup
 
 #### `render()`
-- **Defined**: `popup.js:218`
+- **Defined**: `popup.js:223`
 - **Impact**: critical — the only render path
 - **Called by**: `load()` (50) — and `load()` is called after every mutation
 - **Calls**: `renderTabs` (226), `renderDomains` (227), `userColor`, `buildRow` (284), `currentDomain`
@@ -234,14 +234,14 @@ adding it there; `test/wiring.test.mjs` fails if the popup sends something unhan
 - **Change note**: there is no partial rendering. Any state change goes through `load()` → `render()`.
 
 #### `currentDomain()`
-- **Defined**: `popup.js:38`
+- **Defined**: `popup.js:42`
 - **Impact**: critical — every user-facing list is filtered by it
 - **Called by**: `render` (222), `targetUrl` (295), `active-edit` handler, add/edit submit
 - **Side effects**: none
 - **Change note**: falls back to `domains[0]` when `selectedDomain` is unset or stale (e.g. after the selected domain is deleted).
 
 #### `openUserForm(session)`
-- **Defined**: `popup.js:199`
+- **Defined**: `popup.js:203`
 - **Impact**: high
 - **Called by**: `buildRow` edit button, `#add-toggle`, `#active-edit`
 - **Change note**: `session = null` means add, otherwise edit. `closeUserForm()` calls `form.reset()`, so the submit handler must read field values **before** closing.
