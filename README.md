@@ -3,6 +3,8 @@
 Switch between multiple logins on an HTTP-auth protected site (K2, IIS, internal tools)
 without restarting Chrome.
 
+Made by **Mohammad Salameh**.
+
 ## Why closing the tab didn't work
 
 The login you described — a popup that isn't part of the page HTML — is Chrome's native

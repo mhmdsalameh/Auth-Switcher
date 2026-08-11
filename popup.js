@@ -248,20 +248,6 @@ function render() {
   $("#add-toggle").hidden = settingsOpen || !domain || formOpen;
   $("#status-bar").hidden = settingsOpen;
 
-  if (state.lastReset) {
-    const { restored, lost, aborted } = state.lastReset;
-    const hint = $("#reset-hint");
-    if (aborted) {
-      hint.textContent = "Aborted safely — nothing cleared.";
-      hint.title = `Snapshot could not be written (${aborted}). No cookies were lost.`;
-    } else {
-      hint.textContent = lost ? `${restored} restored, ${lost} failed` : `${restored} restored`;
-      hint.title = lost
-        ? `${lost} cookies could not be restored; those sites need a fresh sign-in.`
-        : "Every other-site cookie was restored.";
-    }
-  }
-
   const note = $("#scheme-note");
   if (state.ruleError) {
     note.hidden = false;
@@ -389,15 +375,6 @@ $("#detected-add").addEventListener("click", async () => {
 
 $("#preemptive").addEventListener("change", async (e) => {
   await chrome.storage.local.set({ preemptive: e.target.checked });
-});
-
-$("#reset-auth").addEventListener("click", async (e) => {
-  e.target.disabled = true;
-  e.target.textContent = "Clearing…";
-  await send({ type: "resetAuth" });
-  await load();
-  e.target.disabled = false;
-  e.target.textContent = "Clear cached sign-ins";
 });
 
 // ---- Backup ----------------------------------------------------------------

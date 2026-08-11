@@ -33,15 +33,12 @@
       <label class="check"
              title="Attaches an Authorization: Basic header to every request. Basic auth only — an unsolicited header breaks the NTLM/Negotiate handshake and login will fail.">
         <input type="checkbox" id="preemptive" />
+        <span class="toggle" aria-hidden="true"></span>
         <span>Pre-emptive credentials</span>
         <span class="hint">Basic only</span>
       </label>
 
       <p id="scheme-note" class="msg" hidden></p>
-
-      <button id="reset-auth" class="btn"
-              title="Switching users already does this. Cookies for every other site are saved and restored.">Clear cached sign-ins</button>
-      <p class="hint" id="reset-hint">Other sites stay signed in.</p>
 
       <div class="label sub-head">Backup</div>
       <div class="form-actions">

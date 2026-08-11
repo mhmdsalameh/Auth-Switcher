@@ -297,13 +297,6 @@ async function switchTo(sessionId) {
   await reloadTabsIn(scope);
 }
 
-async function resetAuth() {
-  const { domains } = await getConfig();
-  await clearAuthCache(domains);
-  await syncRules();
-  await reloadTabsIn(domains);
-}
-
 async function openAs(sessionId, url) {
   const tab = await chrome.tabs.create({ url });
   const { tabAssignments = {} } = await chrome.storage.session.get("tabAssignments");
@@ -316,7 +309,6 @@ async function openAs(sessionId, url) {
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   const handlers = {
     switch: () => switchTo(msg.sessionId),
-    resetAuth: () => resetAuth(),
     openAs: () => openAs(msg.sessionId, msg.url),
     sync: () => syncRules()
   };

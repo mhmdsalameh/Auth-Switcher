@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "K2 Multi-Session",
   "version": "1.0.0",
-  "description": "Switch between multiple HTTP-auth logins on the same site without restarting Chrome.",
+  "description": "Switch between multiple HTTP-auth logins on the same site without restarting Chrome. Made by Mohammad Salameh.",
   "minimum_chrome_version": "116",
   "permissions": [
     "storage",

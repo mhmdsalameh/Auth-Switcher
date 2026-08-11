@@ -54,7 +54,7 @@ including tests.
 | `background.js` | 240 | `clearAuthCache()` — global cookie clear with out-of-scope preservation |
 | `background.js` | 268 | `clearSiteState()` — localStorage/IDB/SW for the target domain |
 | `background.js` | 276 | `reloadTabsIn()` — reloads affected tabs |
-| `background.js` | 307 | `openAs()` — pins a new tab to a specific user |
+| `background.js` | 300 | `openAs()` — pins a new tab to a specific user |
 
 ### Cookie snapshot / crash recovery
 
@@ -115,11 +115,11 @@ including tests.
 
 | How it starts | File | Line |
 |---------------|------|------|
-| Service worker boot (every spin-up) | `background.js` | 346 |
-| Browser start / extension install | `background.js` | 341 |
+| Service worker boot (every spin-up) | `background.js` | 338 |
+| Browser start / extension install | `background.js` | 333 |
 | Auth challenge from any site | `background.js` | 132 |
-| Message from popup | `background.js` | 316 |
-| Popup opened | `popup.js` | 556 |
+| Message from popup | `background.js` | 309 |
+| Popup opened | `popup.js` | 533 |
 
 ---
 
@@ -148,14 +148,13 @@ including tests.
 
 ### Popup → service worker (`chrome.runtime.sendMessage`)
 
-Handlers are registered in one object at `background.js:317`. Adding a message means
+Handlers are registered in one object at `background.js:310`. Adding a message means
 adding it there; `test/wiring.test.mjs` fails if the popup sends something unhandled.
 
 | Message | Sent from | Handled at |
 |---------|-----------|------------|
-| `{type:"switch", sessionId}` | `popup.js:152` | `background.js:318` |
-| `{type:"openAs", sessionId, url}` | `popup.js:174` | `background.js:320` |
-| `{type:"resetAuth"}` | `popup.js:397` | `background.js:319` |
+| `{type:"switch", sessionId}` | `popup.js:152` | `background.js:311` |
+| `{type:"openAs", sessionId, url}` | `popup.js:174` | `background.js:312` |
 
 ### Popup → backup module
 
@@ -172,8 +171,8 @@ adding it there; `test/wiring.test.mjs` fails if the popup sends something unhan
 
 #### `syncRules()`
 - **Defined**: `background.js:68`
-- **Impact**: critical — 8 call sites
-- **Called by**: `switchTo` (297), `resetAuth` (306), `openAs` (315), `tabs.onRemoved` (337), `storage.onChanged` (341), `onInstalled` (344), `onStartup` (345), worker boot (350)
+- **Impact**: critical — 7 call sites
+- **Called by**: `switchTo` (294), `openAs` (305), `tabs.onRemoved` (326), `storage.onChanged` (330), `onInstalled` (333), `onStartup` (334), worker boot (339)
 - **Calls**: `getConfig` (71), `authRule` (85, 93), `basicHeader` via `authRule`
 - **Side effects**: replaces all DNR session rules; writes `ruleError`
 - **Change note**: rebuilds every rule from scratch — cheap and avoids drift. Rules are emitted **per domain**; a change here affects all environments at once.
@@ -181,7 +180,7 @@ adding it there; `test/wiring.test.mjs` fails if the popup sends something unhan
 #### `getConfig()`
 - **Defined**: `background.js:41`
 - **Impact**: critical — read by every entry point
-- **Called by**: `syncRules` (71), `onAuthRequired` (138), `switchTo` (288), `resetAuth` (304)
+- **Called by**: `syncRules` (69), `onAuthRequired` (136), `switchTo` (285)
 - **Calls**: `chrome.storage.local.get`, `chrome.storage.session.get`
 - **Side effects**: none
 - **Change note**: merges local and session storage into one object. The shape lives in `storage.js:6` and is imported by both the worker and the popup — add new keys there, not locally. `test/wiring.test.mjs` fails if either file redeclares `DEFAULTS`.
@@ -189,7 +188,7 @@ adding it there; `test/wiring.test.mjs` fails if the popup sends something unhan
 #### `clearAuthCache(domains)`
 - **Defined**: `background.js:240`
 - **Impact**: high — destructive
-- **Called by**: `switchTo` (299), `resetAuth` (305)
+- **Called by**: `switchTo` (296)
 - **Calls**: `hostInScope` (247), `toSetDetails` (247), `restoreSnapshot` (267)
 - **Side effects**: **clears every cookie in Chrome**, then restores out-of-scope ones
 - **Change note**: the snapshot must be persisted *before* `browsingData.remove`. `test/wiring.test.mjs` asserts that ordering; if the write fails the clear is abandoned deliberately.
