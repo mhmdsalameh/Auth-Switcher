@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "description": "Switch between multiple HTTP-auth logins on the same site without restarting Chrome. Made by Mohammad Salameh.",
   "minimum_chrome_version": "116",
+  "incognito": "split",
   "permissions": [
     "storage",
     "tabs",

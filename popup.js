@@ -1,5 +1,5 @@
 import { buildBackup, parseBackup, openBackup, mergeBackup } from "./backup.js";
-import { STORAGE_DEFAULTS } from "./storage.js";
+import { STORAGE_DEFAULTS, IS_INCOGNITO, readActiveByDomain, writeActiveByDomain } from "./storage.js";
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -48,6 +48,7 @@ function currentDomain() {
 
 async function load() {
   state = await chrome.storage.local.get(STORAGE_DEFAULTS);
+  state.activeByDomain = await readActiveByDomain();
   render();
 }
 
@@ -185,7 +186,8 @@ function buildRow(session) {
     const sessions = state.sessions.filter((x) => x.id !== session.id);
     const activeByDomain = { ...state.activeByDomain };
     if (activeByDomain[session.domain] === session.id) delete activeByDomain[session.domain];
-    await chrome.storage.local.set({ sessions, activeByDomain });
+    await chrome.storage.local.set({ sessions });
+    await writeActiveByDomain(activeByDomain);
     await load();
   });
 
@@ -303,6 +305,7 @@ function render() {
   }
 
   const bits = [domain ?? "no domain"];
+  if (IS_INCOGNITO) bits.push("private");
   if (state.lastScheme) bits.push(state.lastScheme.toUpperCase());
   bits.push(`${mine.length} user${mine.length === 1 ? "" : "s"}`);
   $("#status-bar").textContent = bits.join("  ·  ");
@@ -476,7 +479,8 @@ $("#import-form").addEventListener("submit", async (e) => {
 
 async function applyImport(payload) {
   const { domains, sessions, activeByDomain, added, skipped } = mergeBackup(state, payload);
-  await chrome.storage.local.set({ domains, sessions, activeByDomain });
+  await chrome.storage.local.set({ domains, sessions });
+  await writeActiveByDomain(activeByDomain);
   await load();
   backupStatus(
     skipped ? `Imported ${added} users, skipped ${skipped} already here.` : `Imported ${added} users.`
@@ -526,7 +530,8 @@ $("#add-form").addEventListener("submit", async (e) => {
   activeByDomain[domain] ??= session.id;
 
   closeUserForm();
-  await chrome.storage.local.set({ sessions: [...state.sessions, session], activeByDomain });
+  await chrome.storage.local.set({ sessions: [...state.sessions, session] });
+  await writeActiveByDomain(activeByDomain);
   await load();
 });
 

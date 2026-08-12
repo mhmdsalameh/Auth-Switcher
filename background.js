@@ -7,7 +7,14 @@
 //   2. webRequest.onAuthRequired answers any challenge that still gets through
 //      (Digest and NTLM cannot be pre-empted with a static header).
 
-import { STORAGE_DEFAULTS, SNAPSHOT_KEY } from "./storage.js";
+import {
+  STORAGE_DEFAULTS,
+  SNAPSHOT_KEY,
+  IS_INCOGNITO,
+  INSTANCE_AREA,
+  readActiveByDomain,
+  writeActiveByDomain
+} from "./storage.js";
 
 const ALL_RESOURCE_TYPES = [
   "main_frame", "sub_frame", "stylesheet", "script", "image", "font",
@@ -18,6 +25,7 @@ const ALL_RESOURCE_TYPES = [
 // Authorization header breaks NTLM/Negotiate sites outright.
 // v1 stored a flat session list with one global activeSessionId.
 async function migrate() {
+  if (IS_INCOGNITO) return;
   const stored = await chrome.storage.local.get(["sessions", "domains", "activeSessionId"]);
   const sessions = stored.sessions ?? [];
   if (stored.activeSessionId === undefined && sessions.every((s) => s.domain)) return;
@@ -41,7 +49,7 @@ function domainForHost(host, domains) {
 async function getConfig() {
   const local = await chrome.storage.local.get(STORAGE_DEFAULTS);
   const { tabAssignments = {} } = await chrome.storage.session.get("tabAssignments");
-  return { ...local, tabAssignments };
+  return { ...local, activeByDomain: await readActiveByDomain(), tabAssignments };
 }
 
 function basicHeader({ username, password }) {
@@ -123,6 +131,8 @@ async function alreadyAttempted(requestId) {
 // Most-recent-first list of hosts that challenged us while out of scope, offered in the
 // popup as a one-click way to configure the domain. Capped so it stays a suggestion.
 async function noteChallenge(host) {
+  // A private window's browsing must not surface as a suggestion in the normal one.
+  if (IS_INCOGNITO) return;
   const { seenChallenges = [] } = await chrome.storage.local.get("seenChallenges");
   if (seenChallenges[0] === host) return;
   const next = [host, ...seenChallenges.filter((h) => h !== host)].slice(0, 3);
@@ -213,9 +223,9 @@ const MAX_RESTORE_ATTEMPTS = 3;
 // that already exists is a harmless overwrite, so running this twice costs nothing.
 // Only cookies that still failed are kept, so retries shrink monotonically.
 async function restoreSnapshot() {
-  const { [SNAPSHOT_KEY]: snap } = await chrome.storage.local.get(SNAPSHOT_KEY);
+  const { [SNAPSHOT_KEY]: snap } = await INSTANCE_AREA.get(SNAPSHOT_KEY);
   if (!snap?.cookies?.length) {
-    if (snap) await chrome.storage.local.remove(SNAPSHOT_KEY);
+    if (snap) await INSTANCE_AREA.remove(SNAPSHOT_KEY);
     return { restored: 0, lost: 0 };
   }
 
@@ -226,10 +236,10 @@ async function restoreSnapshot() {
   );
 
   if (failed.length && attempts < MAX_RESTORE_ATTEMPTS) {
-    await chrome.storage.local.set({ [SNAPSHOT_KEY]: { cookies: failed, attempts } });
+    await INSTANCE_AREA.set({ [SNAPSHOT_KEY]: { cookies: failed, attempts } });
   } else {
     // Give up rather than retry a permanently invalid cookie on every startup forever.
-    await chrome.storage.local.remove(SNAPSHOT_KEY);
+    await INSTANCE_AREA.remove(SNAPSHOT_KEY);
   }
   return { restored: snap.cookies.length - failed.length, lost: failed.length };
 }
@@ -251,7 +261,7 @@ async function clearAuthCache(domains) {
   // and the restore, the next spin-up picks the snapshot back up instead of losing every
   // login. If this write fails we must NOT clear — there would be no way back.
   try {
-    await chrome.storage.local.set({ [SNAPSHOT_KEY]: { cookies: preserved, attempts: 0 } });
+    await INSTANCE_AREA.set({ [SNAPSHOT_KEY]: { cookies: preserved, attempts: 0 } });
   } catch (e) {
     await chrome.storage.local.set({
       lastReset: { at: Date.now(), restored: 0, lost: 0, aborted: String(e.message ?? e) }
@@ -288,9 +298,7 @@ async function switchTo(sessionId) {
 
   // Scoped to this user's own domain, so other environments keep their sessions.
   const scope = [session.domain];
-  await chrome.storage.local.set({
-    activeByDomain: { ...activeByDomain, [session.domain]: sessionId }
-  });
+  await writeActiveByDomain({ ...activeByDomain, [session.domain]: sessionId });
   await syncRules();
   await clearSiteState(scope);
   await clearAuthCache(scope);
@@ -329,6 +337,14 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
 chrome.storage.local.onChanged.addListener((changes) => {
   if (changes.sessions || changes.domains || changes.preemptive) syncRules();
 });
+
+// The popup writes the active user to this instance's own area; in a private window that is
+// storage.session, which the local listener above never sees.
+if (IS_INCOGNITO) {
+  chrome.storage.session.onChanged.addListener((changes) => {
+    if (changes.activeByDomain) syncRules();
+  });
+}
 
 chrome.runtime.onInstalled.addListener(syncRules);
 chrome.runtime.onStartup.addListener(syncRules);

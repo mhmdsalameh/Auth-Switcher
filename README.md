@@ -40,10 +40,34 @@ Gmail, Jira, and everything else.
 The settings panel reports how many cookies were restored after each clear. A small number
 can fail to restore (unusual attribute combinations); those sites need a re-login.
 
-The snapshot is written to `storage.local` **before** the clear, so if Chrome terminates
-the service worker mid-operation the cookies are restored on the next spin-up rather than
-lost. If the snapshot cannot be written at all, the clear is abandoned instead of leaving
-you with no way back.
+The snapshot is written **before** the clear, so if Chrome terminates the service worker
+mid-operation the cookies are restored on the next spin-up rather than lost. If the
+snapshot cannot be written at all, the clear is abandoned instead of leaving you with no
+way back.
+
+## Private windows are a separate session
+
+A private (incognito) window runs its **own** signed-in user, independent of your normal
+windows. Switch to Approver in a private window and your normal window stays on whoever it
+was — and vice versa. That gives you two live users at once without the ↗ button's
+stateless-site caveat, because Chrome gives private windows their own cookie jar and their
+own HTTP auth cache.
+
+The status bar in the popup shows `private` so you can tell which session you are looking
+at.
+
+Your **users and domains are shared** with private windows — you do not have to re-add
+them. Only the active selection is separate. Nothing a private window does is written to
+disk: its cookie snapshot and its active user live in session memory and vanish when the
+last private window closes.
+
+A private window opens on whatever user your normal window is currently signed in as, then
+diverges from there once you switch.
+
+> Requires **Allow in Incognito** for the extension (`chrome://extensions` → Details). This
+> is enforced by `"incognito": "split"` in the manifest, which makes Chrome run a second,
+> fully independent copy of the extension for private browsing. Without it, one shared copy
+> serves both and there is no way to keep the sessions apart.
 
 ## Moving to another browser or laptop
 
@@ -114,7 +138,7 @@ path.
 - **Negotiate/Kerberos with SSO configured** (`AuthServerAllowlist` policy) never prompts
   and never fires `onAuthRequired`. No extension can intercept it. Use separate Chrome
   profiles or `runas /netonly` instead.
-- Passwords are stored unencrypted in `chrome.storage.local`, readable by anyone with
+- Passwords are stored unencrypted in `chrome.storage.local` (shared with private windows), readable by anyone with
   access to your Chrome profile directory. **QA accounts only — never real credentials.**
 - Credentials are sent to every configured domain. Keep the domain list tight.
 

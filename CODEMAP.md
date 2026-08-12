@@ -63,7 +63,7 @@ including tests.
 | File | Line | What it is |
 |------|------|------------|
 | `background.js` | 215 | `restoreSnapshot()` — idempotent write-back, capped retries |
-| `background.js` | 210 | `MAX_RESTORE_ATTEMPTS` — retry cap (`SNAPSHOT_KEY` lives in `storage.js`) |
+| `background.js` | 220 | `MAX_RESTORE_ATTEMPTS` — retry cap (`SNAPSHOT_KEY` lives in `storage.js`) |
 | `background.js` | 190 | `toSetDetails()` — `cookies.get` → `cookies.set` shape conversion |
 | `background.js` | 184 | `cookieUrl()` — reconstructs a URL from a cookie record |
 
@@ -102,6 +102,8 @@ including tests.
 |------|------|------------|
 | `storage.js` | 6 | `STORAGE_DEFAULTS` — **single** canonical shape of `storage.local` |
 | `storage.js` | 20 | `SNAPSHOT_KEY` — kept out of the defaults on purpose |
+| `storage.js` | 31 | `IS_INCOGNITO` — which profile instance this code is running in |
+| `storage.js` | 33 | `INSTANCE_AREA` — storage area that must not cross the profile boundary |
 | `background.js` | 41 | `getConfig()` — reads local + session storage together |
 | `background.js` | 20 | `migrate()` — v1 (flat sessions) → v2 (per-domain) |
 | `background.js` | 179 | `hostInScope()` — domain matching, used by cookie filtering |
@@ -130,17 +132,39 @@ including tests.
 | Shape | Where defined | Notes |
 |-------|--------------|-------|
 | `Session` | `storage.js:6` | `{id, domain, name, username, password, color}` |
-| `activeByDomain` | `storage.js:6` | `{domain → sessionId}`, one active user per domain |
+| `activeByDomain` | `storage.js:6` | `{domain → sessionId}`, one active user per domain **per profile instance** |
 | `tabAssignments` | `storage.session` | `{tabId → sessionId}`, dies with the browser |
-| `cookieSnapshot` | `storage.js:20`, shape at `background.js:215` | `{cookies: SetDetails[], attempts: number}` |
+| `cookieSnapshot` | `storage.js:20`, shape at `background.js:225` | `{cookies: SetDetails[], attempts: number}` |
 | Backup file v1 | `backup.js:32` | `{format, version, encrypted, kdf?, iv?, data?, payload?}` |
 
 ### Storage areas — persistence matters here
 
-| Area | Keys | Survives restart |
-|------|------|------------------|
-| `storage.local` | `sessions`, `domains`, `activeByDomain`, `selectedDomain`, `preemptive`, `lastScheme`, `ruleError`, `lastReset`, `seenChallenges`, `cookieSnapshot` | yes |
-| `storage.session` | `tabAssignments`, `authAttempts` | no (by design) |
+| Area | Keys | Survives restart | Shared with private windows |
+|------|------|------------------|------------------------------|
+| `storage.local` | `sessions`, `domains`, `selectedDomain`, `preemptive`, `lastScheme`, `ruleError`, `lastReset`, `seenChallenges` | yes | **yes** |
+| `storage.session` | `tabAssignments`, `authAttempts` | no (by design) | no |
+| `INSTANCE_AREA` (`storage.js:33`) | `activeByDomain`, `cookieSnapshot` | normal profile only | no |
+
+`INSTANCE_AREA` resolves to `storage.local` in the normal profile and `storage.session` in a
+private window - see *Profile isolation* below. Never read those two keys from
+`storage.local` directly; go through `readActiveByDomain()` / `writeActiveByDomain()`.
+
+### Profile isolation (`"incognito": "split"`)
+
+The manifest asks Chrome for **split** incognito, so a private window runs a *second,
+independent instance* of the extension: its own service worker, its own
+`declarativeNetRequest` session rules, its own `onAuthRequired` listener, its own cookie
+store, and its own `storage.session`. Switching users in a private window therefore cannot
+touch the normal window - which was the bug this replaced.
+
+`storage.local` is still shared across both instances, deliberately, so the user list and
+domain list do not have to be re-entered in a private window. Anything that is *session
+state* rather than *configuration* must go through `INSTANCE_AREA` instead.
+
+`IS_INCOGNITO` (`storage.js:31`) is how either instance knows which one it is. It reads
+`chrome.extension.inIncognitoContext`, available in both the service worker and the popup.
+If that ever evaluates `false` inside a private window, every isolation guarantee above
+silently collapses back to the old shared behaviour - check it first if this regresses.
 
 ---
 
@@ -178,49 +202,49 @@ adding it there; `test/wiring.test.mjs` fails if the popup sends something unhan
 - **Change note**: rebuilds every rule from scratch — cheap and avoids drift. Rules are emitted **per domain**; a change here affects all environments at once.
 
 #### `getConfig()`
-- **Defined**: `background.js:41`
+- **Defined**: `background.js:49`
 - **Impact**: critical — read by every entry point
-- **Called by**: `syncRules` (69), `onAuthRequired` (136), `switchTo` (285)
-- **Calls**: `chrome.storage.local.get`, `chrome.storage.session.get`
+- **Called by**: `syncRules` (77), `onAuthRequired` (146), `switchTo` (295)
+- **Calls**: `chrome.storage.local.get`, `chrome.storage.session.get`, `readActiveByDomain`
 - **Side effects**: none
-- **Change note**: merges local and session storage into one object. The shape lives in `storage.js:6` and is imported by both the worker and the popup — add new keys there, not locally. `test/wiring.test.mjs` fails if either file redeclares `DEFAULTS`.
+- **Change note**: merges local and session storage into one object, then overrides `activeByDomain` with this instance's own copy — that override is what keeps a private window off the normal window's user. The shape lives in `storage.js:6` and is imported by both the worker and the popup — add new keys there, not locally. `test/wiring.test.mjs` fails if either file redeclares `DEFAULTS`.
 
 #### `clearAuthCache(domains)`
-- **Defined**: `background.js:240`
+- **Defined**: `background.js:250`
 - **Impact**: high — destructive
-- **Called by**: `switchTo` (296)
-- **Calls**: `hostInScope` (247), `toSetDetails` (247), `restoreSnapshot` (267)
-- **Side effects**: **clears every cookie in Chrome**, then restores out-of-scope ones
+- **Called by**: `switchTo` (306)
+- **Calls**: `hostInScope` (257), `toSetDetails` (257), `restoreSnapshot` (277)
+- **Side effects**: **clears every cookie in the calling instance's profile**, then restores out-of-scope ones. Under split incognito that is the private profile only — `cookies.getAll` and `browsingData.remove` both resolve against the calling context.
 - **Change note**: the snapshot must be persisted *before* `browsingData.remove`. `test/wiring.test.mjs` asserts that ordering; if the write fails the clear is abandoned deliberately.
 
 #### `restoreSnapshot()`
-- **Defined**: `background.js:215`
+- **Defined**: `background.js:225`
 - **Impact**: high
-- **Called by**: `clearAuthCache` (267), worker boot (351)
+- **Called by**: `clearAuthCache` (277), worker boot (356)
 - **Side effects**: writes cookies; clears or decrements the stored snapshot
-- **Change note**: idempotent by design — re-setting an existing cookie is a harmless overwrite. Runs on **every** worker spin-up, which is the crash-recovery path.
+- **Change note**: idempotent by design — re-setting an existing cookie is a harmless overwrite. Runs on **every** worker spin-up, which is the crash-recovery path. Reads the snapshot from `INSTANCE_AREA`, never `storage.local`: restoring a private window's cookies into the normal profile would be both a bug and a disclosure.
 
 #### `switchTo(sessionId)`
-- **Defined**: `background.js:284`
+- **Defined**: `background.js:294`
 - **Impact**: high — the extension's main action
-- **Called by**: message handler (321) ← `popup.js:152`
-- **Calls**: `getConfig` (288), `syncRules` (297), `clearSiteState` (298), `clearAuthCache` (299), `reloadTabsIn` (300)
-- **Side effects**: writes `activeByDomain`; clears cookies; reloads tabs
-- **Change note**: scoped to `session.domain` only. Widening that scope would break the guarantee that switching on UAT leaves DEV signed in — covered by a test.
+- **Called by**: message handler (329) ← `popup.js:153`
+- **Calls**: `getConfig` (295), `writeActiveByDomain` (301), `syncRules` (302), `clearSiteState` (303), `clearAuthCache` (304), `reloadTabsIn` (305)
+- **Side effects**: writes `activeByDomain` **to this instance only**; clears cookies; reloads tabs
+- **Change note**: scoped twice over — to `session.domain`, and to the calling profile instance. Widening either breaks a guarantee: the first that switching on UAT leaves DEV signed in, the second that switching in a private window leaves the normal window alone.
 
 #### `migrate()`
-- **Defined**: `background.js:20`
+- **Defined**: `background.js:27`
 - **Impact**: high — runs before everything
-- **Called by**: worker boot (349)
+- **Called by**: worker boot (354)
 - **Side effects**: rewrites `sessions`, writes `activeByDomain`, removes `activeSessionId`
-- **Change note**: must stay idempotent; it runs on every worker spin-up, not just on update.
+- **Change note**: must stay idempotent; it runs on every worker spin-up, not just on update. No-ops in the private instance — it rewrites shared `storage.local`, which the normal profile owns.
 
 #### `onAuthRequired` listener
-- **Defined**: `background.js:132`
+- **Defined**: `background.js:142`
 - **Impact**: critical — the primary mechanism
-- **Calls**: `getConfig` (138), `domainForHost` (151), `noteChallenge` (155), `alreadyAttempted` (161)
-- **Side effects**: writes `lastScheme` and `seenChallenges`; supplies credentials
-- **Change note**: registered `asyncBlocking`. Returning without calling `callback` hangs the request.
+- **Calls**: `getConfig` (148), `domainForHost` (161), `noteChallenge` (165), `alreadyAttempted` (171)
+- **Side effects**: writes `lastScheme`; writes `seenChallenges` (normal profile only); supplies credentials
+- **Change note**: registered `asyncBlocking`. Returning without calling `callback` hangs the request. Under split incognito each instance only sees its own profile's challenges, and that is what makes per-profile credentials possible at all: `details` carries no incognito flag and `details.tabId` is `-1` for subresources, so a single shared instance could not tell them apart.
 
 ### Popup
 

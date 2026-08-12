@@ -18,3 +18,35 @@ export const STORAGE_DEFAULTS = {
 // Deliberately not in STORAGE_DEFAULTS: the snapshot can hold thousands of cookies, and
 // getConfig() runs on every auth challenge. It is read explicitly, only when needed.
 export const SNAPSHOT_KEY = "cookieSnapshot";
+
+// ---- Profile isolation -----------------------------------------------------
+
+// The manifest asks for split incognito, so Chrome runs a second, independent instance of
+// this extension for private windows. The two instances share storage.local but NOT
+// storage.session — so anything that must not cross the profile boundary is read and
+// written through INSTANCE_AREA rather than storage.local directly.
+//
+// What stays shared on purpose: the user list, the domain list, and the settings. Those are
+// configuration, and having to re-add every user in a private window would be absurd.
+export const IS_INCOGNITO = chrome.extension?.inIncognitoContext === true;
+
+export const INSTANCE_AREA = IS_INCOGNITO ? chrome.storage.session : chrome.storage.local;
+
+// A private window opens on whatever user the normal profile is signed in as, and diverges
+// from there. Seeding beats starting on "Nobody": the common case is wanting a *second*
+// user alongside the current one, not a blank slate.
+export async function readActiveByDomain() {
+  if (!IS_INCOGNITO) {
+    return (await chrome.storage.local.get({ activeByDomain: {} })).activeByDomain;
+  }
+  const { activeByDomain } = await chrome.storage.session.get("activeByDomain");
+  if (activeByDomain) return activeByDomain;
+
+  const seed = (await chrome.storage.local.get({ activeByDomain: {} })).activeByDomain;
+  await chrome.storage.session.set({ activeByDomain: seed });
+  return seed;
+}
+
+export async function writeActiveByDomain(activeByDomain) {
+  await INSTANCE_AREA.set({ activeByDomain });
+}
