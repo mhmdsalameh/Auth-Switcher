@@ -2,7 +2,18 @@
 // merge logic can be tested directly — a backup that cannot be re-imported is worthless.
 
 export const FORMAT = "k2-multi-session";
-const KDF_ITERATIONS = 250_000;
+const KDF_ITERATIONS = 600_000;
+
+// The domain list decides where passwords get sent, so everything entering it is normalized
+// the same way — typed by hand or read out of a file nobody authenticated.
+export function normalizeDomain(line) {
+  return String(line ?? "")
+    .trim()
+    .replace(/^[a-z]+:\/\//i, "")
+    .replace(/\/.*$/, "")
+    .replace(/:\d+$/, "")
+    .toLowerCase();
+}
 
 const b64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
 const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
@@ -86,11 +97,14 @@ const identity = (s) => `${s.domain}\u0000${s.username}`;
 // Merges rather than replaces, so importing onto a populated install is non-destructive.
 // A user already present for the same domain and username is skipped.
 export function mergeBackup(current, payload, newId = () => crypto.randomUUID()) {
-  const incoming = (payload?.sessions ?? []).filter((s) => s?.domain && s?.username && s?.name);
+  const incoming = (payload?.sessions ?? [])
+    .filter((s) => s?.domain && s?.username && s?.name)
+    .map((s) => ({ ...s, domain: normalizeDomain(s.domain) }))
+    .filter((s) => s.domain);
 
   const domains = [...new Set([
     ...current.domains,
-    ...(payload?.domains ?? []),
+    ...(payload?.domains ?? []).map(normalizeDomain),
     ...incoming.map((s) => s.domain)
   ].filter(Boolean))];
 

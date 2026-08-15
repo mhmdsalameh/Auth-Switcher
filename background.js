@@ -46,6 +46,19 @@ function domainForHost(host, domains) {
   return domains.find((d) => h === d || h.endsWith("." + d)) ?? null;
 }
 
+// Basic auth is base64, i.e. cleartext on the wire. Over plain http on the public internet
+// that is an interception waiting to happen — but intranet hosts served over http are this
+// extension's whole reason to exist, so those keep working.
+function isPrivateHost(host) {
+  const h = host.toLowerCase().replace(/^\[|\]$/g, "");
+  if (h === "localhost" || h.endsWith(".localhost") || h === "::1") return true;
+  if (!h.includes(".")) return true; // single-label intranet name, e.g. "k2server"
+  if (h.endsWith(".local") || h.endsWith(".internal") || h.endsWith(".intranet")) return true;
+  if (/^127\.|^10\.|^192\.168\./.test(h)) return true;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return true;
+  return false;
+}
+
 async function getConfig() {
   const local = await chrome.storage.local.get(STORAGE_DEFAULTS);
   const { tabAssignments = {} } = await chrome.storage.session.get("tabAssignments");
@@ -59,6 +72,11 @@ function basicHeader({ username, password }) {
 }
 
 function authRule(id, priority, session, domains, condExtra) {
+  const condition = { requestDomains: domains, resourceTypes: ALL_RESOURCE_TYPES, ...condExtra };
+  // Anchored at the start of the URL, so the header is only ever attached over TLS.
+  // Skipped for intranet hosts, which are routinely http-only.
+  if (!domains.every(isPrivateHost)) condition.urlFilter = "|https://";
+
   return {
     id,
     priority,
@@ -68,7 +86,7 @@ function authRule(id, priority, session, domains, condExtra) {
         { header: "Authorization", operation: "set", value: basicHeader(session) }
       ]
     },
-    condition: { requestDomains: domains, resourceTypes: ALL_RESOURCE_TYPES, ...condExtra }
+    condition
   };
 }
 
@@ -102,12 +120,12 @@ async function syncRules() {
 
   try {
     await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds, addRules });
-    await chrome.storage.local.set({ ruleError: null });
+    await INSTANCE_AREA.set({ ruleError: null });
   } catch (e) {
     // Chrome refuses modifyHeaders rules it considers unsafe. Surface it instead of
     // failing silently — onAuthRequired still covers us, just less deterministically.
     await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds });
-    await chrome.storage.local.set({ ruleError: String(e.message ?? e) });
+    await INSTANCE_AREA.set({ ruleError: String(e.message ?? e) });
   }
 }
 
@@ -147,20 +165,33 @@ chrome.webRequest.onAuthRequired.addListener(
 
     // Record the scheme so the popup can tell the user what they're actually up against.
     if (details.scheme) {
-      await chrome.storage.local.set({ lastScheme: details.scheme.toLowerCase() });
+      await INSTANCE_AREA.set({ lastScheme: details.scheme.toLowerCase() });
     }
 
-    let host;
+    let url;
     try {
-      host = new URL(details.url).hostname;
+      url = new URL(details.url);
     } catch {
       return callback({});
     }
+    const host = url.hostname;
     const domain = domainForHost(host, domains);
     if (!domain) {
       // We know exactly which host is asking for credentials, so the popup can offer it
       // rather than making the user type a domain correctly from memory.
       await noteChallenge(host);
+      return callback({});
+    }
+
+    // Basic hands the password over in base64. Refuse to do that unencrypted to a public
+    // host and let Chrome's own dialog take over, so the choice is at least a conscious one.
+    // Digest/NTLM/Negotiate never put the password on the wire, so they are left alone.
+    if (
+      details.scheme?.toLowerCase() === "basic" &&
+      url.protocol === "http:" &&
+      !isPrivateHost(host)
+    ) {
+      await INSTANCE_AREA.set({ insecureHost: host });
       return callback({});
     }
 
@@ -172,6 +203,7 @@ chrome.webRequest.onAuthRequired.addListener(
     const session = sessions.find((s) => s.id === sessionId);
     if (!session) return callback({});
 
+    await INSTANCE_AREA.set({ insecureHost: null });
     callback({
       authCredentials: { username: session.username, password: session.password }
     });
@@ -263,7 +295,7 @@ async function clearAuthCache(domains) {
   try {
     await INSTANCE_AREA.set({ [SNAPSHOT_KEY]: { cookies: preserved, attempts: 0 } });
   } catch (e) {
-    await chrome.storage.local.set({
+    await INSTANCE_AREA.set({
       lastReset: { at: Date.now(), restored: 0, lost: 0, aborted: String(e.message ?? e) }
     });
     return;
@@ -272,7 +304,7 @@ async function clearAuthCache(domains) {
   await chrome.browsingData.remove({}, { cookies: true });
 
   const { restored, lost } = await restoreSnapshot();
-  await chrome.storage.local.set({ lastReset: { at: Date.now(), restored, lost } });
+  await INSTANCE_AREA.set({ lastReset: { at: Date.now(), restored, lost } });
 }
 
 async function clearSiteState(domains) {
@@ -314,7 +346,12 @@ async function openAs(sessionId, url) {
   await chrome.tabs.reload(tab.id, { bypassCache: true });
 }
 
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  // Nothing outside this extension can reach onMessage today (no content scripts, no
+  // externally_connectable). This guard is here so that stays true if either is ever added
+  // — openAs binds a tab to a stored credential set and must never be web-reachable.
+  if (sender.id !== chrome.runtime.id) return false;
+
   const handlers = {
     switch: () => switchTo(msg.sessionId),
     openAs: () => openAs(msg.sessionId, msg.url),

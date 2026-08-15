@@ -1,12 +1,19 @@
-import { buildBackup, parseBackup, openBackup, mergeBackup } from "./backup.js";
-import { STORAGE_DEFAULTS, IS_INCOGNITO, readActiveByDomain, writeActiveByDomain } from "./storage.js";
+import { buildBackup, parseBackup, openBackup, mergeBackup, normalizeDomain } from "./backup.js";
+import {
+  STORAGE_DEFAULTS,
+  INSTANCE_DEFAULTS,
+  IS_INCOGNITO,
+  readActiveByDomain,
+  writeActiveByDomain,
+  readInstanceState
+} from "./storage.js";
 
 const $ = (sel) => document.querySelector(sel);
 
 const PALETTE = ["#e0a33e", "#4a9eff", "#5bbd7a", "#d47ba8", "#a98cf0", "#e0705c"];
 
 // Copied, not aliased — render() reads state constantly and must never mutate the shared shape.
-let state = { ...STORAGE_DEFAULTS };
+let state = { ...STORAGE_DEFAULTS, ...INSTANCE_DEFAULTS };
 
 // Search is deliberately not persisted: a filter left over from last time would hide users.
 const SEARCH_MIN = 5; // only worth the clutter once the list scans badly
@@ -20,15 +27,6 @@ function userColor(session) {
   let h = 0;
   for (const ch of session.id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   return PALETTE[h % PALETTE.length];
-}
-
-function normalizeDomain(line) {
-  return line
-    .trim()
-    .replace(/^[a-z]+:\/\//i, "")
-    .replace(/\/.*$/, "")
-    .replace(/:\d+$/, "")
-    .toLowerCase();
 }
 
 const SCHEME_NOTES = {
@@ -47,7 +45,7 @@ function currentDomain() {
 }
 
 async function load() {
-  state = await chrome.storage.local.get(STORAGE_DEFAULTS);
+  state = { ...(await chrome.storage.local.get(STORAGE_DEFAULTS)), ...(await readInstanceState()) };
   state.activeByDomain = await readActiveByDomain();
   render();
 }
@@ -251,7 +249,15 @@ function render() {
   $("#status-bar").hidden = settingsOpen;
 
   const note = $("#scheme-note");
-  if (state.ruleError) {
+  // Ranked by urgency: a withheld password explains a failed login, a rejected rule only
+  // explains slower switching.
+  if (state.insecureHost) {
+    note.hidden = false;
+    note.classList.add("msg-warn");
+    note.textContent = `Withheld credentials from ${state.insecureHost} — Basic auth over plain http.`;
+    note.title =
+      "The password would have gone out unencrypted. Use https, or an intranet address.";
+  } else if (state.ruleError) {
     note.hidden = false;
     note.classList.add("msg-warn");
     note.textContent = "Pre-emptive header rejected — using challenge-response.";

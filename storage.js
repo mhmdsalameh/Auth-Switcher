@@ -9,10 +9,16 @@ export const STORAGE_DEFAULTS = {
   activeByDomain: {},
   selectedDomain: null,
   preemptive: false,
+  seenChallenges: []
+};
+
+// Diagnostics, not configuration: they describe what happened in *this* profile instance,
+// so a private window's must not be written to shared, on-disk storage.local.
+export const INSTANCE_DEFAULTS = {
   lastScheme: null,
   ruleError: null,
   lastReset: null,
-  seenChallenges: []
+  insecureHost: null
 };
 
 // Deliberately not in STORAGE_DEFAULTS: the snapshot can hold thousands of cookies, and
@@ -49,4 +55,8 @@ export async function readActiveByDomain() {
 
 export async function writeActiveByDomain(activeByDomain) {
   await INSTANCE_AREA.set({ activeByDomain });
+}
+
+export async function readInstanceState() {
+  return INSTANCE_AREA.get(INSTANCE_DEFAULTS);
 }

@@ -1,8 +1,5 @@
 node_modules/
 
-# Local test suite
-test/
-
 # Codemap staleness tracker
 .codemap-dirty
 
