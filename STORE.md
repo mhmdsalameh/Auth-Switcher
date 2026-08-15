@@ -185,6 +185,104 @@ Scope limits, all enforced in code:
 
 ---
 
+## Test instructions for the reviewer
+
+Paste into the "instructions for reviewers / test credentials" field.
+
+The extension has no account and no login of its own, so there is nothing to hand over —
+but a reviewer cannot exercise it without a site that issues an HTTP auth challenge.
+httpbin.org is used below because the accepted credentials are part of the URL, so two
+different accounts can be created on one host, and the response body names whichever
+account authenticated. That makes the result visible rather than inferred.
+
+```
+The extension itself has no account, no login and no server, so there are no credentials
+to provide for it. It stores credentials for OTHER sites.
+
+To test it you need a site that issues an HTTP authentication challenge. httpbin.org
+provides one publicly, and the credentials it accepts are part of the URL, so you can
+create two separate accounts on the same host. The response body names whichever account
+authenticated, so the result is directly visible.
+
+Takes about two minutes.
+
+SETUP
+1. Install and pin the extension. Click its toolbar icon.
+2. Click the gear icon to open Settings.
+3. In "Site domains", type: httpbin.org
+   Press Enter. It appears as a chip.
+4. Click the gear again to leave Settings.
+
+ADD TWO ACCOUNTS
+5. Click "Add user". Enter:
+      Label:    Alice
+      Username: alice
+      Password: wonderland
+   Save.
+6. Click "Add user" again. Enter:
+      Label:    Bob
+      Username: bob
+      Password: builder
+   Save.
+
+VERIFY THE FIRST ACCOUNT
+7. The popup shows "Signed in as" one of the two. Click the other name to make Alice the
+   active user, then open this URL in a tab:
+
+      https://httpbin.org/basic-auth/alice/wonderland
+
+   Expected: the page loads WITHOUT Chrome showing a credential prompt, and the body is
+      { "authenticated": true, "user": "alice" }
+   The extension answered the 401 challenge on your behalf.
+
+VERIFY SWITCHING
+8. Open the extension popup and click "Bob".
+   The popup closes, the tab reloads, and the popup now reads "Signed in as Bob".
+9. Open this URL:
+
+      https://httpbin.org/basic-auth/bob/builder
+
+   Expected: loads without a prompt, body is
+      { "authenticated": true, "user": "bob" }
+
+   This is the core feature. Without the extension, Chrome caches the first set of
+   credentials for httpbin.org in memory and reuses them until the browser is fully
+   restarted, so the second account could not be reached in the same session.
+
+VERIFY OTHER SESSIONS SURVIVE THE SWITCH
+10. Before switching, sign in to any unrelated site (any site where you have a session).
+11. Switch users in the extension, then reload that unrelated site.
+    Expected: you are still signed in there.
+
+    Switching clears Chrome's HTTP auth cache, and the only API that does so clears all
+    cookies globally. The extension snapshots every cookie outside the configured domains
+    and restores it immediately afterwards. This step demonstrates that the broad host
+    permission is used for restoring the user's sessions, not for accessing those sites.
+
+OPTIONAL - Digest authentication
+12. Add domain httpbin.org (already added) and a user with username "digestuser" and
+    password "digestpass", then open:
+
+      https://httpbin.org/digest-auth/auth/digestuser/digestpass
+
+    Expected: authenticates without a prompt. Digest is handled by the same listener.
+
+OPTIONAL - private window isolation
+13. Enable "Allow in Incognito" for the extension at chrome://extensions -> Details.
+    Open a private window, open the popup there and switch to a different user than the
+    one selected in your normal window.
+    Expected: each window keeps its own signed-in user independently.
+
+NOTES
+- The extension deliberately refuses to send Basic credentials over plain http:// to a
+  public host, because Basic is reversible base64. Intranet addresses are exempt. All the
+  test URLs above are https, so this does not interfere.
+- No credentials, cookies or browsing data are transmitted anywhere. The extension makes
+  no network requests of its own.
+```
+
+---
+
 ## Data usage disclosures
 
 Tick **Authentication information** — Chrome's policy names "logins, passwords, and
