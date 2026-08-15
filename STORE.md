@@ -53,9 +53,19 @@ credentials in it that would matter if they leaked.
 Not affiliated with, endorsed by, or produced by Nintex or K2 Software, Inc.
 ```
 
-**Privacy policy URL**: must be publicly reachable before submitting. Either
-- enable GitHub Pages on the repo and link `PRIVACY.md`, or
-- link the raw file: `https://raw.githubusercontent.com/mhmdsalameh/<repo>/main/PRIVACY.md`
+**Homepage URL**
+`https://mhmdsalameh.github.io/Auth-Switcher/`
+
+**Privacy policy URL**
+`https://mhmdsalameh.github.io/Auth-Switcher/privacy.html`
+
+> Requires GitHub Pages: repo **Settings → Pages → Source: Deploy from a branch →
+> `main` / `/docs` → Save**. Live about a minute later.
+>
+> Fallback that works without Pages, already reachable:
+> `https://github.com/mhmdsalameh/Auth-Switcher/blob/main/PRIVACY.md`
+> It renders fine and is accepted, but it is GitHub's UI around a source file rather than
+> a page of your own — the Pages URL is the better look on a store listing.
 
 ---
 
@@ -185,8 +195,12 @@ remote script, no WASM fetched at runtime.
 
 ```
 git archive --format=zip -o ../auth-switcher-1.1.0.zip HEAD \
-  ':!test' ':!tools' ':!*.md' ':!package.json' ':!.gitignore'
+  ':!test' ':!tools' ':!docs' ':!*.md' ':!LICENSE' ':!package.json' ':!.gitignore' \
+  ':!icons/source.jpg'
 ```
+
+`icons/source.jpg` is the 1024px master art — it is excluded because shipping a 60 KB
+image the extension never loads is exactly the kind of thing that draws a question.
 
 ---
 
