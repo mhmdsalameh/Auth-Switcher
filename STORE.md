@@ -67,6 +67,20 @@ Not affiliated with, endorsed by, or produced by Nintex or K2 Software, Inc.
 > It renders fine and is accepted, but it is GitHub's UI around a source file rather than
 > a page of your own — the Pages URL is the better look on a store listing.
 
+**Screenshots** — `store/screenshots/`, 1280×800, upload in this order. The store shows the
+first image largest and most often, so the fullest screen leads and the empty state is last.
+
+| # | File | Says |
+|---|------|------|
+| 1 | `01-switch.png` | Switch between logins instantly |
+| 2 | `02-per-site.png` | Each site tracks its own signed-in user |
+| 3 | `03-domains.png` | Credentials go only where you say |
+| 4 | `04-backup.png` | Encrypted backup and restore |
+| 5 | `05-empty.png` | No server, no telemetry, nothing to configure |
+
+Every capture uses `demo.test` and throwaway accounts. No internal hostname appears in any
+of them — check that again if you ever re-shoot these.
+
 ---
 
 ## Single purpose
@@ -183,8 +197,9 @@ remote script, no WASM fetched at runtime.
 - [x] ~~Regenerate the icon.~~ Done — key with a circulating swap arrow, no lettering,
       no trademark. Source art kept at `icons/source.jpg`; rebuild with
       `python tools/make-icons.py icons/source.jpg`.
-- [ ] Screenshots (1280×800 or 640×400, at least one). **Use fake domains.** The demo
-      masking on the `demo/mask-domains` branch produces exactly this.
+- [x] ~~Screenshots.~~ Done — five at 1280×800 in `store/screenshots/`, upload in filename
+      order. Raw popup captures are in `store/raw/`; re-compose with
+      `python tools/make-screenshots.py` after any UI change.
 - [ ] Privacy policy hosted at a public URL and pasted into the dashboard.
 - [ ] Zip the extension without `test/`, `tools/`, `.git`, `*.md`, `package.json`.
 - [ ] Bump `version` in `manifest.json` on every re-upload — the store rejects a repeat.

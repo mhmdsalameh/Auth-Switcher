@@ -17,7 +17,7 @@ const run = (cmd, args, opts = {}) =>
 
 // Files the extension never loads at runtime have no business in the package.
 const EXCLUDE = [
-  ":!test", ":!tools", ":!docs", ":!*.md", ":!LICENSE",
+  ":!test", ":!tools", ":!docs", ":!store", ":!*.md", ":!LICENSE",
   ":!package.json", ":!package-lock.json", ":!.gitignore", ":!icons/source.jpg"
 ];
 
