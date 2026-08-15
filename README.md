@@ -1,4 +1,4 @@
-# Auth Switcher — HTTP Multi-Login
+# Auth Switcher - HTTP Multi-Login
 
 Hold several logins for the same HTTP-auth protected site and switch between them without
 restarting Chrome. Built for QA work on internal tools — IIS, K2, and anything else that

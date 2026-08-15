@@ -14,7 +14,7 @@ improvised at 11pm. Visibility: **Unlisted** to start.
 ## Listing
 
 **Name**
-`Auth Switcher — HTTP Multi-Login`
+`Auth Switcher - HTTP Multi-Login`
 
 **Short description** (132 char limit — this is 94)
 `Hold several HTTP-auth logins for one site and switch between them without restarting Chrome.`

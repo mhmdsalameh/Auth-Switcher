@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Auth Switcher — HTTP Multi-Login",
+  "name": "Auth Switcher - HTTP Multi-Login",
   "version": "1.1.0",
   "description": "Hold several HTTP-auth logins for one site and switch between them without restarting Chrome.",
   "minimum_chrome_version": "116",
