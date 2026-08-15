@@ -149,22 +149,38 @@ a domain. Tab contents are never read or injected into.
 
 **Host permission `<all_urls>`**
 ```
-Required for two reasons, both structural rather than convenience.
+This permission is used to put the user's cookies back after a switch. It is not used to
+access the sites those cookies belong to.
 
-First, cookie preservation. Switching users requires clearing Chrome's HTTP auth cache,
-and Chrome offers no origin-scoped API for it — browsingData.remove is global. To avoid
-signing the user out of every unrelated site, the extension must read all cookies, perform
-the clear, and write the out-of-scope ones back. chrome.cookies.getAll only returns
-cookies for origins the extension holds host access to, so narrower permissions would let
-the clear proceed while making the restore impossible, silently destroying every other
-session the user has.
+Switching accounts requires clearing Chrome's HTTP auth cache. Chrome provides no API to
+clear that cache for a single origin. The only mechanism that clears it is
+chrome.browsingData.remove with cookies:true, and that call is global: it deletes every
+cookie in the profile, for every site, and it does so whether or not the extension holds
+host permissions.
 
-Second, the webRequest.onAuthRequired listener must be registered with its URL filter at
-service-worker startup, before the user has configured any domain, and must keep working
-as they add more.
+So the extension reads all cookies first, performs the clear, and immediately writes back
+every cookie belonging to a site the user did not configure. The user stays signed in to
+their email, their issue tracker, and everything else.
 
-Credentials are only ever supplied to domains the user explicitly configured. All other
-hosts are passed through untouched. No page content is read and no scripts are injected.
+chrome.cookies.getAll only returns cookies for origins the extension holds host access
+to. This produces an asymmetry that is the entire reason for the broad permission:
+
+  - browsingData.remove deletes everything, regardless of host permissions.
+  - cookies.getAll can only read, and therefore only restore, what it has access to.
+
+With a narrower host permission the destructive half of that pair would still run at full
+scope while the recovery half could only cover the user's own configured domains. The
+result would be that every unrelated session the user has is destroyed on every switch,
+with no way to recover it. The broad permission is what makes the feature safe, not what
+makes it risky.
+
+Scope limits, all enforced in code:
+  - Credentials are only ever supplied to domains the user explicitly added. Every other
+    host is passed through untouched.
+  - Cookies outside those domains are only read in order to be written back unchanged,
+    within the same operation. They are never inspected, transmitted or retained.
+  - No page content is read. No scripts are injected. No content scripts are declared.
+  - The extension makes no network requests of its own and contacts no server.
 ```
 
 ---
