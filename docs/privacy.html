@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Privacy Policy — Auth Switcher</title>
+<meta name="description" content="Privacy policy for the Auth Switcher Chrome extension. No server, no analytics, no data leaves your browser." />
+<link rel="icon" href="icon128.png" />
+<style>
+  :root {
+    --bg: #1e1e1e; --surface: #252526; --border: #3c3c3c;
+    --text: #e4e4e4; --muted: #9d9d9d; --accent: #4a9eff; --warn: #e0a33e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 40px 20px 80px;
+    background: var(--bg); color: var(--text);
+    font: 16px/1.65 "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  main { max-width: 760px; margin: 0 auto; }
+  header { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
+  header img { width: 44px; height: 44px; }
+  h1 { font-size: 26px; margin: 0; letter-spacing: -0.01em; }
+  h2 {
+    font-size: 19px; margin: 42px 0 12px; padding-top: 18px;
+    border-top: 1px solid var(--border);
+  }
+  .meta { color: var(--muted); font-size: 14px; margin: 0 0 32px; }
+  .meta a { color: var(--muted); }
+  a { color: var(--accent); }
+  table { border-collapse: collapse; width: 100%; margin: 18px 0; font-size: 14.5px; }
+  th, td { text-align: left; padding: 9px 12px; border: 1px solid var(--border); vertical-align: top; }
+  th { background: var(--surface); font-weight: 600; }
+  code {
+    font: 13px/1.4 Consolas, "Cascadia Mono", ui-monospace, monospace;
+    background: var(--surface); padding: 2px 5px; border-radius: 3px;
+  }
+  .callout {
+    background: var(--surface); border-left: 3px solid var(--warn);
+    padding: 14px 18px; margin: 22px 0; border-radius: 0 4px 4px 0;
+  }
+  .callout strong { color: var(--warn); }
+  ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  footer {
+    margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 14px;
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="icon128.png" alt="" />
+    <h1>Privacy Policy — Auth Switcher</h1>
+  </header>
+  <p class="meta">
+    Last updated: 15 August 2026 &middot;
+    <a href="mailto:hammoudahsalameh@gmail.com">hammoudahsalameh@gmail.com</a> &middot;
+    <a href="https://github.com/mhmdsalameh/Auth-Switcher">Source code</a>
+  </p>
+
+  <h2>The short version</h2>
+  <p>
+    This extension has no server. Nothing it stores is transmitted anywhere. There is no
+    analytics, no telemetry, no crash reporting, no remote code, and no third party of any
+    kind. Everything below happens entirely inside your own copy of Chrome.
+  </p>
+
+  <h2>What it stores, and why</h2>
+  <table>
+    <thead><tr><th>Data</th><th>Why</th><th>Where it is kept</th></tr></thead>
+    <tbody>
+      <tr><td>Usernames and passwords you type into it</td><td>To answer the HTTP authentication prompt on the sites you configure</td><td><code>chrome.storage.local</code>, on your machine</td></tr>
+      <tr><td>The domain list you configure</td><td>To decide which sites may receive those credentials</td><td><code>chrome.storage.local</code>, on your machine</td></tr>
+      <tr><td>Which user is currently selected per domain</td><td>To know who to sign in as</td><td>Session storage, per browser profile</td></tr>
+      <tr><td>The authentication scheme a site asked for (Basic / Digest / NTLM / Negotiate)</td><td>To warn you when a setting is unsafe for your site</td><td>Session storage, per browser profile</td></tr>
+      <tr><td>Hosts that prompted for credentials but are not configured</td><td>To offer them as a one-click suggestion. Capped at 3, most recent first</td><td><code>chrome.storage.local</code>, on your machine</td></tr>
+      <tr><td>A temporary copy of your browser cookies</td><td>See “The cookie snapshot” below</td><td>Session or local storage, deleted immediately after use</td></tr>
+    </tbody>
+  </table>
+
+  <h2>How your credentials are used</h2>
+  <p>
+    Credentials are sent to one place: the site you configured them for, as the answer to
+    that site's own HTTP authentication challenge. They are never sent anywhere else, never
+    sent to the developer, and never sent to any third party.
+  </p>
+  <p>Two restrictions are enforced in code:</p>
+  <ul>
+    <li>Credentials are only ever offered to a domain in your configured list, or a
+      subdomain of one. Everything else is ignored.</li>
+    <li>Basic authentication is refused over unencrypted <code>http://</code> to a public
+      host, because Basic puts the password on the wire in a trivially reversible encoding.
+      Intranet addresses are exempt, since internal http-only tools are the reason this
+      extension exists.</li>
+  </ul>
+
+  <h2>The cookie snapshot</h2>
+  <p>
+    Switching users requires clearing Chrome's HTTP authentication cache. Chrome offers no
+    way to clear that cache for one site, so the only available lever clears cookies for
+    everything. To avoid signing you out of every other site you use, the extension copies
+    your other cookies, performs the clear, and writes them straight back.
+  </p>
+  <p>
+    That copy exists only for the seconds a switch takes, and is deleted as soon as the
+    cookies are restored. It is written to extension storage rather than held in memory so
+    that it can survive Chrome shutting the extension's background process down mid-switch —
+    without that, an unlucky moment would lose every login you have. It is never transmitted
+    anywhere.
+  </p>
+  <div class="callout">
+    <strong>In a normal window this copy is written to disk unencrypted while it exists.</strong>
+    In a private window it is held in memory only.
+  </div>
+
+  <h2>Storage is not encrypted</h2>
+  <p>
+    Passwords are stored as you typed them, not encrypted. Anyone with read access to your
+    Chrome profile directory — another user of the same account, backup software, or malware
+    running as you — can read them.
+  </p>
+  <div class="callout">
+    This extension is built for QA and test accounts on internal systems.
+    <strong>Do not put credentials in it that would matter if they leaked.</strong>
+  </div>
+  <p>
+    Backup files you export are encrypted with AES-256-GCM if you set a passphrase, and are
+    written in plain text if you leave the passphrase blank. The export dialog says so at
+    the time.
+  </p>
+
+  <h2>Private windows</h2>
+  <p>
+    A private window runs a separate instance with its own selected user, its own cookie
+    snapshot, and its own diagnostics, none of which are written to disk. Your saved user
+    list and domain list are deliberately shared with private windows so you do not have to
+    type them twice.
+  </p>
+
+  <h2>What is never collected</h2>
+  <p>
+    No browsing history. No page content. No keystrokes. No personal information. No
+    location. No device identifiers. No usage statistics. The extension does not read the
+    pages you visit; it only sees the authentication challenges that sites issue, and only
+    acts on the ones for domains you configured.
+  </p>
+
+  <h2>Data sharing and sale</h2>
+  <p>
+    None. There is no recipient to share with. Data is not sold, not transferred, and not
+    used for advertising, creditworthiness, or lending. It is not used for any purpose other
+    than the single feature described above.
+  </p>
+
+  <h2>Deletion</h2>
+  <p>
+    Removing the extension from Chrome deletes everything it stored. Individual users and
+    domains can be deleted at any time from the extension's own interface.
+  </p>
+
+  <h2>Permissions, and why each is needed</h2>
+  <table>
+    <thead><tr><th>Permission</th><th>Why it is required</th></tr></thead>
+    <tbody>
+      <tr><td><code>webRequest</code>, <code>webRequestAuthProvider</code></td><td>The only way to answer an HTTP authentication challenge programmatically</td></tr>
+      <tr><td><code>declarativeNetRequest</code></td><td>Optional pre-emptive mode: attaches the credential header so no challenge occurs</td></tr>
+      <tr><td><code>cookies</code></td><td>To copy and restore your other sites' cookies around the required clear</td></tr>
+      <tr><td><code>browsingData</code></td><td>To clear the HTTP authentication cache, which is what makes switching work</td></tr>
+      <tr><td><code>storage</code>, <code>unlimitedStorage</code></td><td>To hold your users and domains, and the temporary cookie snapshot</td></tr>
+      <tr><td><code>tabs</code></td><td>To reload the affected tabs after a switch, and to offer the current tab's domain</td></tr>
+      <tr><td><code>&lt;all_urls&gt;</code></td><td>The authentication listener must be registered before you configure any domain, so it cannot be scoped in advance. Credentials are only ever supplied to the domains you configure</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Changes</h2>
+  <p>
+    Material changes to this policy will be published in the extension's
+    <a href="https://github.com/mhmdsalameh/Auth-Switcher">repository</a> alongside a
+    version bump.
+  </p>
+
+  <footer>
+    Auth Switcher is not affiliated with, endorsed by, or produced by Nintex or K2 Software,
+    Inc.
+  </footer>
+</main>
+</body>
+</html>
