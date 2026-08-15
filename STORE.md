@@ -170,8 +170,9 @@ remote script, no WASM fetched at runtime.
 
 ## Before you upload
 
-- [ ] **Regenerate the icon.** The current art still reads "K2" — it contradicts the new
-      name and carries the trademark into the store listing. See the note below.
+- [x] ~~Regenerate the icon.~~ Done — key with a circulating swap arrow, no lettering,
+      no trademark. Source art kept at `icons/source.jpg`; rebuild with
+      `python tools/make-icons.py icons/source.jpg`.
 - [ ] Screenshots (1280×800 or 640×400, at least one). **Use fake domains.** The demo
       masking on the `demo/mask-domains` branch produces exactly this.
 - [ ] Privacy policy hosted at a public URL and pasted into the dashboard.
