@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "K2 Multi-Session",
+  "name": "Auth Switcher — HTTP Multi-Login",
   "version": "1.1.0",
-  "description": "Switch between multiple HTTP-auth logins on the same site without restarting Chrome. Made by Mohammad Salameh.",
+  "description": "Hold several HTTP-auth logins for one site and switch between them without restarting Chrome.",
   "minimum_chrome_version": "116",
   "incognito": "split",
   "permissions": [
@@ -20,8 +20,20 @@
     "service_worker": "background.js",
     "type": "module"
   },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "K2 Multi-Session"
+    "default_title": "Auth Switcher",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
   }
 }

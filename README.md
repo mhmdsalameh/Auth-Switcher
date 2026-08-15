@@ -1,9 +1,13 @@
-# K2 Multi-Session
+# Auth Switcher — HTTP Multi-Login
 
-Switch between multiple logins on an HTTP-auth protected site (K2, IIS, internal tools)
-without restarting Chrome.
+Hold several logins for the same HTTP-auth protected site and switch between them without
+restarting Chrome. Built for QA work on internal tools — IIS, K2, and anything else that
+uses the browser's own credential prompt.
 
 Made by **Mohammad Salameh**.
+
+> Not affiliated with, endorsed by, or produced by Nintex or K2 Software, Inc. "K2" is
+> named only to describe a system this tool works with.
 
 ## Why closing the tab didn't work
 
@@ -92,7 +96,7 @@ diverges from there once you switch.
 
 Settings &#9881; → **Backup**.
 
-- **Export…** asks for a passphrase and downloads `k2-users-YYYY-MM-DD.json`. With a
+- **Export…** asks for a passphrase and downloads `auth-switcher-users-YYYY-MM-DD.json`. With a
   passphrase the file is AES-256-GCM encrypted, key derived by PBKDF2-SHA256 (600k
   iterations, random salt) — safe to send over email, Teams or a USB stick. Leave the
   passphrase blank and **the file contains your passwords in plain text**.
@@ -125,7 +129,7 @@ round-tripping) and the refusal to send Basic credentials over plain http.
 
 ## Setup
 
-1. Open K2 once and let the sign-in prompt appear, then click the extension → gear icon.
+1. Open the site once and let the sign-in prompt appear, then click the extension → gear icon.
    The host that asked for credentials is offered there — click **Add**. Failing that, use
    **This site** to take the current tab's domain, or type it. Subdomains are included
    automatically.

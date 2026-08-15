@@ -28,6 +28,16 @@ for (const f of [manifest.background.service_worker, manifest.action.default_pop
   if (!fs.existsSync(new URL(f, root))) fail.push(`manifest/HTML references missing file: ${f}`);
 }
 
+// The store rejects a submission with no 128px icon, and a missing icon file is a silent
+// load failure rather than an error.
+for (const size of [16, 32, 48, 128]) {
+  for (const [where, set] of [["icons", manifest.icons], ["action.default_icon", manifest.action.default_icon]]) {
+    const f = set?.[size];
+    if (!f) fail.push(`manifest ${where} is missing the ${size}px entry`);
+    else if (!fs.existsSync(new URL(f, root))) fail.push(`${where}[${size}] points at a missing file: ${f}`);
+  }
+}
+
 // A bad relative import in an MV3 module script fails silently at runtime.
 for (const [file, src] of [["popup.js", js], ["background.js", bg]]) {
   for (const [, spec] of src.matchAll(/from "(\.\/[^"]+)"/g)) {

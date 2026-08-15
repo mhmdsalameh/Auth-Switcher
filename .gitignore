@@ -5,4 +5,4 @@ node_modules/
 
 # Exported backups contain QA passwords in the clear when no passphrase is set.
 # Never commit one.
-k2-users-*.json
+*-users-*.json

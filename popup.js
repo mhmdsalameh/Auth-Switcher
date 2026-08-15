@@ -427,7 +427,7 @@ $("#export-form").addEventListener("submit", async (e) => {
   try {
     const file = await buildBackup(state, passphrase);
     const stamp = new Date().toISOString().slice(0, 10);
-    downloadJson(JSON.stringify(file, null, 2), `k2-users-${stamp}.json`);
+    downloadJson(JSON.stringify(file, null, 2), `auth-switcher-users-${stamp}.json`);
     backupStatus(passphrase ? "Exported, encrypted." : "Exported. Passwords are in the clear.");
   } catch (err) {
     backupStatus(String(err.message ?? err), true);

@@ -1,7 +1,9 @@
 // Export/import of users and domains. Kept free of DOM and chrome.* so the crypto and
 // merge logic can be tested directly — a backup that cannot be re-imported is worthless.
 
-export const FORMAT = "k2-multi-session";
+export const FORMAT = "auth-switcher";
+// Files written before the rename. Still readable — a rename must not orphan someone's backup.
+const LEGACY_FORMATS = ["k2-multi-session"];
 const KDF_ITERATIONS = 600_000;
 
 // The domain list decides where passwords get sent, so everything entering it is normalized
@@ -70,7 +72,9 @@ export function parseBackup(text) {
   } catch {
     throw new Error("That file isn't valid JSON.");
   }
-  if (file?.format !== FORMAT) throw new Error("That isn't a K2 Multi-Session backup.");
+  if (file?.format !== FORMAT && !LEGACY_FORMATS.includes(file?.format)) {
+    throw new Error("That isn't an Auth Switcher backup.");
+  }
   if (file.version !== 1) throw new Error(`Backup version ${file.version} isn't supported.`);
   return file;
 }

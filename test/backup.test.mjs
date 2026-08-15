@@ -53,8 +53,10 @@ const tests = {
 
   async "foreign and corrupt files are refused"() {
     assert.throws(() => parseBackup("{not json"), /valid JSON/);
-    assert.throws(() => parseBackup('{"format":"something-else"}'), /isn't a K2/);
+    assert.throws(() => parseBackup('{"format":"something-else"}'), /isn't an Auth Switcher/);
     assert.throws(() => parseBackup(`{"format":"${FORMAT}","version":9}`), /version 9/);
+    // Files written before the rename must still open.
+    assert.equal(parseBackup('{"format":"k2-multi-session","version":1}').version, 1);
   },
 
   async "import merges without duplicating existing users"() {
