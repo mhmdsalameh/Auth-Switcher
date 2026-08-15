@@ -187,7 +187,22 @@ Scope limits, all enforced in code:
 
 ## Test instructions for the reviewer
 
-Paste into the "instructions for reviewers / test credentials" field.
+**The dashboard field is capped at 500 characters.** Paste this (497):
+
+```
+No login: this holds credentials for OTHER sites. Use httpbin.org, which issues a real 401.
+1. Popup > gear > add domain: httpbin.org
+2. Add user Alice / alice / wonderland
+3. Add user Bob / bob / builder
+4. Select Alice, open httpbin.org/basic-auth/alice/wonderland
+5. Select Bob, open httpbin.org/basic-auth/bob/builder
+Both load with no prompt; the body names the user. Chrome caches the first login till restart, so step 5 is the feature.
+Full: mhmdsalameh.github.io/Auth-Switcher/testing.html
+```
+
+The long version below is published at
+`https://mhmdsalameh.github.io/Auth-Switcher/testing.html` (`docs/testing.html`), which is
+what that last line points at. Keep the two in sync if either changes.
 
 The extension has no account and no login of its own, so there is nothing to hand over —
 but a reviewer cannot exercise it without a site that issues an HTTP auth challenge.
