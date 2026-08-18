@@ -36,6 +36,10 @@ const SCHEME_NOTES = {
   negotiate: "<strong>Negotiate</strong> — keep pre-emptive off."
 };
 
+// Schemes that negotiate over the Authorization header itself, so a static value set by
+// the pre-emptive rule overwrites the handshake and login can never complete.
+const UNPREEMPTABLE = new Set(["digest", "ntlm", "negotiate"]);
+
 // The tab the popup is showing. Falls back to the first domain if unset or stale.
 function currentDomain() {
   if (state.selectedDomain && state.domains.includes(state.selectedDomain)) {
@@ -163,6 +167,13 @@ function buildRow(session) {
   editBtn.setAttribute("aria-label", `Edit ${session.name}`);
   editBtn.addEventListener("click", () => openUserForm(session));
 
+  // The ↗ pin is delivered entirely by the tab-scoped DNR rule, which syncRules builds only
+  // in pre-emptive mode. Without that rule Chrome answers from its auth cache before any 401,
+  // onAuthRequired never runs, its tabAssignments lookup is never reached, and the new tab
+  // silently opens as whoever is already signed in. A button that returns the wrong user is
+  // worse than no button.
+  const canPin = state.preemptive && !state.ruleError;
+
   const openBtn = document.createElement("button");
   openBtn.type = "button";
   openBtn.className = "icon-btn";
@@ -189,7 +200,7 @@ function buildRow(session) {
     await load();
   });
 
-  actions.append(editBtn, openBtn, delBtn);
+  actions.append(editBtn, ...(canPin ? [openBtn] : []), delBtn);
   li.append(main, actions);
   return li;
 }
@@ -257,6 +268,15 @@ function render() {
     note.textContent = `Withheld credentials from ${state.insecureHost} — Basic auth over plain http.`;
     note.title =
       "The password would have gone out unencrypted. Use https, or an intranet address.";
+  } else if (state.preemptive && UNPREEMPTABLE.has(state.lastScheme)) {
+    note.hidden = false;
+    note.classList.add("msg-warn");
+    note.textContent =
+      `Pre-emptive is on but this site uses ${state.lastScheme.toUpperCase()} — login will fail. Turn it off.`;
+    note.title =
+      "These schemes negotiate over the Authorization header. The pre-emptive rule sets " +
+      "that header on every request, overwriting the handshake, so authentication never " +
+      "completes and the password prompt repeats.";
   } else if (state.ruleError) {
     note.hidden = false;
     note.classList.add("msg-warn");
@@ -384,6 +404,9 @@ $("#detected-add").addEventListener("click", async () => {
 
 $("#preemptive").addEventListener("change", async (e) => {
   await chrome.storage.local.set({ preemptive: e.target.checked });
+  // Both the conflict warning and the ↗ buttons key off this, so re-render rather than
+  // making the user close and reopen the popup to find out it broke their login.
+  await load();
 });
 
 // ---- Backup ----------------------------------------------------------------
