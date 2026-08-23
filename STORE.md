@@ -38,8 +38,9 @@ one click.
 • Multiple sites, each with its own set of users and its own signed-in user — switching
   on UAT leaves DEV alone
 • Private windows run their own independent session, so you can hold two users at once
-• Switching does not sign you out of your other sites: your cookies elsewhere are
-  preserved across the clear that switching requires
+• Switching touches only the site you switch on — cookies belonging to sites you did
+  not configure are never even read. Other subdomains of that same site can be signed
+  out too, because Chrome clears the auth cache per registrable domain
 • Encrypted export/import (AES-256-GCM) to move your users to another machine
 • No server, no analytics, no telemetry, no remote code — nothing leaves your browser
 
