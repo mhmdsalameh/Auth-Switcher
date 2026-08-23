@@ -148,7 +148,7 @@ the only way to survive moving this folder.
 npm test
 ```
 
-25 checks. A static wiring pass (manifest, DOM ids, CSS classes, message contracts, 14
+27 checks. A static wiring pass (manifest, DOM ids, CSS classes, message contracts, 21
 regression guards) plus two suites: the backup crypto/merge path, and `background.js`
 executed in a VM with stubbed Chrome APIs — covering the scoped clear (only the target
 domain is touched, other sites' cookies are never read, subdomains are included, the

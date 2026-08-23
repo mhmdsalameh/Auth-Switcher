@@ -186,16 +186,16 @@ Scope limits, all enforced in code:
 
 ## Test instructions for the reviewer
 
-**The dashboard field is capped at 500 characters.** Paste this (497):
+**The dashboard field is capped at 500 characters.** Paste this (498):
 
 ```
-No login: this holds credentials for OTHER sites. Use httpbin.org, which issues a real 401.
-1. Popup > gear > add domain: httpbin.org
+No login: it holds credentials for OTHER sites. Use httpbin.org, which issues a real 401.
+1. Side panel > gear > add domain: httpbin.org
 2. Add user Alice / alice / wonderland
 3. Add user Bob / bob / builder
 4. Select Alice, open httpbin.org/basic-auth/alice/wonderland
 5. Select Bob, open httpbin.org/basic-auth/bob/builder
-Both load with no prompt; the body names the user. Chrome caches the first login till restart, so step 5 is the feature.
+Both load with no prompt; the body names the user. Chrome caches the first login till restart, so step 5 is the point.
 Full: mhmdsalameh.github.io/Auth-Switcher/testing.html
 ```
 
@@ -336,10 +336,13 @@ remote script, no WASM fetched at runtime.
 **Packaging command**
 
 ```
-git archive --format=zip -o ../auth-switcher-1.1.0.zip HEAD \
-  ':!test' ':!tools' ':!docs' ':!*.md' ':!LICENSE' ':!package.json' ':!.gitignore' \
-  ':!icons/source.jpg'
+npm run package
 ```
+
+Runs the suite, builds `../auth-switcher-<version>.zip` from HEAD, then unpacks it and
+verifies the archive actually loads: manifest entry points present, every icon and module
+import resolved, and no version already tagged. Refuses to build from a dirty tree, because
+an uncommitted file that never reaches the zip is a rejection you find out about a day later.
 
 `icons/source.jpg` is the 1024px master art — it is excluded because shipping a 60 KB
 image the extension never loads is exactly the kind of thing that draws a question.

@@ -16,7 +16,7 @@ problem it solves is Chrome's in-memory **HTTP auth cache**, which survives tab 
 - **Finding code**: Go to the relevant domain section → `file:line` → open directly.
 - **Before editing a function**: Read its entry in the [Function Dependency Index](#function-dependency-index) to see what callers will be affected.
 - **After editing**: Run `/codemap update <changed-file>` to keep the map accurate.
-- **Verifying**: `npm test` — 26 checks. The suite is the safety net, not this document.
+- **Verifying**: `npm test` — 27 checks. The suite is the safety net, not this document.
 
 ---
 

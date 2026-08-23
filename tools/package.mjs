@@ -46,8 +46,8 @@ const read = (f) => fs.readFileSync(path.join(tmp, f), "utf8");
 if (!has("manifest.json")) fail.push("no manifest.json in the archive");
 const packed = JSON.parse(read("manifest.json"));
 
-for (const f of [packed.background?.service_worker, packed.action?.default_popup]) {
-  if (!f) fail.push("manifest is missing a service worker or popup entry");
+for (const f of [packed.background?.service_worker, packed.side_panel?.default_path]) {
+  if (!f) fail.push("manifest is missing a service worker or side panel entry");
   else if (!has(f)) fail.push(`manifest references ${f}, which is not in the archive`);
 }
 
