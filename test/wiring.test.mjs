@@ -13,9 +13,27 @@ const bg = read("background.js");
 
 const fail = [];
 
-for (const p of ["storage", "tabs", "cookies", "browsingData",
+for (const p of ["storage", "tabs", "cookies", "browsingData", "sidePanel",
                  "webRequest", "webRequestAuthProvider", "declarativeNetRequest"]) {
   if (!manifest.permissions.includes(p)) fail.push(`manifest missing "${p}" permission`);
+}
+
+if (!manifest.side_panel?.default_path) fail.push("side_panel.default_path missing");
+if (manifest.action?.default_popup) {
+  fail.push("action.default_popup is back — it claims the icon click and the side panel never opens");
+}
+if (!/setPanelBehavior\(\{ openPanelOnActionClick: true \}\)/.test(bg)) {
+  fail.push("setPanelBehavior missing — the toolbar icon would do nothing");
+}
+// The panel outlives a switch: it may only close on the user's explicit request, never as
+// a side effect of switching. window.close() is allowed solely as closePanel()'s fallback
+// for Chrome 144, where sidePanel.close() rejects on a global panel.
+if (!/id="panel-close"/.test(html)) fail.push("close button missing from the side panel");
+if (!/\$\("#panel-close"\)\.addEventListener/.test(js)) fail.push("close button is not wired");
+if (!/chrome\.sidePanel\.close\(/.test(js)) fail.push("closePanel must use sidePanel.close()");
+const closeBody = js.slice(js.indexOf("async function closePanel"), js.indexOf("$(\"#panel-close\")"));
+if ((js.match(/window\.close\(\)/g) ?? []).length !== (closeBody.match(/window\.close\(\)/g) ?? []).length) {
+  fail.push("window.close() outside closePanel — the panel must not dismiss itself");
 }
 
 // Chrome refuses to load an extension whose description exceeds 132 characters.
@@ -23,7 +41,7 @@ if ((manifest.description ?? "").length > 132) {
   fail.push(`manifest description is ${manifest.description.length} chars, max is 132`);
 }
 
-for (const f of [manifest.background.service_worker, manifest.action.default_popup,
+for (const f of [manifest.background.service_worker, manifest.side_panel?.default_path,
                  "popup.css", "popup.js"]) {
   if (!fs.existsSync(new URL(f, root))) fail.push(`manifest/HTML references missing file: ${f}`);
 }
@@ -124,4 +142,4 @@ if (fail.length) {
   console.error("  FAIL\n" + fail.map((f) => "        " + f).join("\n"));
   process.exit(1);
 }
-console.log(`  PASS  manifest, ${ids.length} DOM ids, ${usedClasses.size} CSS classes, messages [${sent}], 14 regression guards`);
+console.log(`  PASS  manifest, ${ids.length} DOM ids, ${usedClasses.size} CSS classes, messages [${sent}], 21 regression guards`);

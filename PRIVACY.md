@@ -105,6 +105,7 @@ domains can be deleted at any time from the extension's own interface.
 | `cookies` | To delete the selected domain's own cookies, one by one. Other sites' cookies are never read |
 | `browsingData` | To clear the selected domain's web storage, and to flush the HTTP auth cache for that domain when nothing else can make a switch take effect |
 | `storage` | To hold your users and domains |
+| `sidePanel` | To show the extension's UI in Chrome's side panel, which stays open when you click elsewhere. An action popup cannot |
 | `tabs` | To reload the affected tabs after a switch, and to offer the current tab's domain |
 | `<all_urls>` | The authentication listener must be registered before you configure any domain, so it cannot be scoped in advance. Credentials are only ever supplied to the domains you configure |
 

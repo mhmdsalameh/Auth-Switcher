@@ -96,7 +96,7 @@
 
   <h2>Verify the first account</h2>
   <ol start="7">
-    <li>Make sure the popup shows <strong>Signed in as Alice</strong>; click Alice if not.
+    <li>Make sure the side panel shows <strong>Signed in as Alice</strong>; click Alice if not.
       Then open:
       <br /><code>https://httpbin.org/basic-auth/alice/wonderland</code>
       <span class="expect"><b>Expected:</b> the page loads with <b>no</b> Chrome credential
@@ -107,7 +107,7 @@
 
   <h2>Verify switching — the core feature</h2>
   <ol start="8">
-    <li>Open the popup and click <strong>Bob</strong>. The popup closes and the tab
+    <li>Open the side panel and click <strong>Bob</strong>. The panel stays open and the tab
       reloads.</li>
     <li>Open:
       <br /><code>https://httpbin.org/basic-auth/bob/builder</code>
@@ -154,7 +154,7 @@
   <ol start="13">
     <li>Enable <strong>Allow in Incognito</strong> at
       <code>chrome://extensions</code> → Details.</li>
-    <li>Open a private window, open the popup there, and switch to a different user than
+    <li>Open a private window, open the side panel there, and switch to a different user than
       the one selected in your normal window.
       <span class="expect"><b>Expected:</b> each window keeps its own signed-in user,
         independently.</span>

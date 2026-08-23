@@ -18,7 +18,15 @@
 [hidden] { display: none !important; }
 
 body {
-  width: 320px;
+  /* Chrome enforces a hard 320dip minimum on the side panel itself
+     (SidePanel::GetMinimumSize, std::max(proposed_width, minimum_width) on drag). Nothing
+     here can widen or narrow that — the enforcement is in browser UI code and ignores the
+     hosted page entirely, and the sidePanel API exposes no width field. The floor below is
+     therefore not what governs the panel width; it only matters under page zoom, where
+     320dip resolves to fewer CSS px. The layout is fluid regardless: every flex row that
+     holds text carries min-width:0. */
+  min-width: 180px;
+  min-height: 100vh;
   margin: 0;
   background: var(--bg);
   color: var(--text);
@@ -26,6 +34,14 @@ body {
 }
 
 .content { padding: 10px; }
+
+/* Only reachable under page zoom — Chrome's own 320dip floor keeps the unzoomed panel
+   wider than this. Kept because zoomed-in users are exactly who need the space back. */
+@media (max-width: 300px) {
+  .content { padding: 7px; }
+  .user-search { flex: 0 1 84px; }
+  .row-main { gap: 6px; padding: 6px; }
+}
 
 .label {
   font-size: 11px;
@@ -197,6 +213,9 @@ p.hint { margin: 5px 0 0; }
   cursor: pointer;
 }
 .icon-btn:hover { color: var(--text); }
+
+/* Sits hard against the panel edge, where a close control is expected. */
+#panel-close { padding-right: 9px; }
 .icon-btn:focus-visible { outline: 1px solid var(--accent); outline-offset: -2px; }
 
 /* ---- Boxes (settings, add user) ----------------------------------------- */

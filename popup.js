@@ -21,6 +21,21 @@ let query = "";
 
 const send = (msg) => chrome.runtime.sendMessage(msg);
 
+// Hand the work to the worker and return immediately.
+//
+// The worker holds the message channel open until switchTo() has finished — waking the
+// service worker, syncing rules, clearing the domain, then reloading its tabs. Awaiting all
+// of that before reacting left the UI looking like the click had not registered for a
+// second or two. Nothing here needs the result: the worker writes activeByDomain early in
+// the switch, and the storage listener at the bottom of this file repaints when it lands.
+//
+// The rejection is swallowed on purpose. If this view is ever torn down mid-flight the
+// worker's sendResponse has nowhere to go and surfaces as "message port closed", which is
+// expected here rather than a failure.
+function fireAndForget(msg) {
+  send(msg).catch(() => {});
+}
+
 function userColor(session) {
   if (session?.color) return session.color;
   if (!session) return null;
@@ -151,9 +166,8 @@ function buildRow(session) {
   user.textContent = session.username;
   meta.append(name, user);
   main.append(dot, meta);
-  main.addEventListener("click", async () => {
-    await send({ type: "switch", sessionId: session.id });
-    window.close();
+  main.addEventListener("click", () => {
+    fireAndForget({ type: "switch", sessionId: session.id });
   });
 
   const actions = document.createElement("span");
@@ -181,8 +195,9 @@ function buildRow(session) {
   openBtn.title = `Open a new tab as ${session.name}`;
   openBtn.setAttribute("aria-label", `Open a new tab as ${session.name}`);
   openBtn.addEventListener("click", async () => {
-    await send({ type: "openAs", sessionId: session.id, url: await targetUrl() });
-    window.close();
+    // targetUrl() is a single tabs.query and must resolve before the message is built.
+    const url = await targetUrl();
+    fireAndForget({ type: "openAs", sessionId: session.id, url });
   });
 
   const delBtn = document.createElement("button");
@@ -248,8 +263,9 @@ function render() {
   // Settings and the user list are separate pages — never both at once.
   $("#settings").hidden = !settingsOpen;
   $("#nav-title").hidden = !settingsOpen;
-  $("#settings-toggle").textContent = settingsOpen ? "✕" : "⚙";
-  $("#settings-toggle").title = settingsOpen ? "Close settings" : "Settings";
+  // ✕ is reserved for #panel-close; a second ✕ here would read as "close the panel" too.
+  $("#settings-toggle").textContent = settingsOpen ? "←" : "⚙";
+  $("#settings-toggle").title = settingsOpen ? "Back" : "Settings";
 
   $("#preemptive").checked = state.preemptive;
   $("#no-domain").hidden = settingsOpen || state.domains.length > 0;
@@ -362,6 +378,22 @@ $("#user-search").addEventListener("keydown", (e) => {
   query = "";
   render();
 });
+
+// sidePanel.close() landed in Chrome 141 and the manifest floor is 144, so it is always
+// present. It requires a tabId or windowId, and on 144 closing a *global* panel through it
+// rejects — that was only relaxed in 145. This panel is registered globally, so the
+// fallback is the load-bearing path on 144: closing the page closes the panel with it.
+// Scoped to this window on purpose; a broadcast close would shut the panel in other windows.
+async function closePanel() {
+  try {
+    const win = await chrome.windows.getCurrent();
+    await chrome.sidePanel.close({ windowId: win.id });
+  } catch {
+    window.close();
+  }
+}
+
+$("#panel-close").addEventListener("click", closePanel);
 
 $("#settings-toggle").addEventListener("click", () => {
   settingsOpen = !settingsOpen;
@@ -562,6 +594,17 @@ $("#add-form").addEventListener("submit", async (e) => {
   await chrome.storage.local.set({ sessions: [...state.sessions, session] });
   await writeActiveByDomain(activeByDomain);
   await load();
+});
+
+// The side panel stays open across a switch, so it has to follow state the worker changes
+// underneath it — otherwise it keeps showing the previous active user. Only the keys a
+// switch actually touches trigger a repaint, and never while a form is open: render()
+// rebuilds the DOM wholesale and would discard whatever the user is part-way through typing.
+const REPAINT_KEYS = ["activeByDomain", "sessions", "domains", "selectedDomain", "ruleError"];
+
+chrome.storage.onChanged.addListener((changes) => {
+  if (formOpen || settingsOpen) return;
+  if (REPAINT_KEYS.some((k) => k in changes)) load();
 });
 
 load();

@@ -81,6 +81,9 @@ function makeChrome({ localStore = {}, sessionStore = {}, cookies = [] } = {}) {
       onAuthRequired: { addListener(fn) { calls.onAuthRequired = fn; } }
     },
     tabs: { async query() { return []; }, async reload() {}, async create() { return { id: 1 }; }, onRemoved: { addListener() {} } },
+    sidePanel: {
+      async setPanelBehavior(opts) { calls.panelBehavior = opts; }
+    },
     runtime: { onMessage: { addListener() {} }, onInstalled: { addListener() {} }, onStartup: { addListener() {} } }
   };
   return { chrome, calls, cookies, localStore, sessionStore };

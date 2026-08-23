@@ -33,14 +33,14 @@ the switch take effect.
 `declarativeNetRequest` rule attaches `Authorization: Basic …` to every request for your
 domains, so the server never sends a `401`. Faster and fully deterministic, but **Basic
 auth only** — an unsolicited Authorization header breaks the NTLM/Negotiate handshake and
-login will fail outright. Only turn this on if the popup reports Basic.
+login will fail outright. Only turn this on if the side panel reports Basic.
 
 ### Basic auth is never sent over plain http to a public host
 
 Basic puts the password on the wire in base64, which is not encryption. Over `http://` on a
 routable domain, anyone on the path can read it — so the extension refuses, on both paths:
 the pre-emptive rule is anchored to `https://`, and the challenge handler declines and lets
-Chrome's own dialog take over. The popup says which host was withheld from.
+Chrome's own dialog take over. The side panel says which host was withheld from.
 
 Intranet addresses are exempt, because http-only internal tools are the whole point:
 loopback, `10.x`, `192.168.x`, `172.16–31.x`, single-label names like `k2server`, and
@@ -87,6 +87,19 @@ thing answering and the flush is the only way to make the switch take effect.
 `lastReset` records what happened (`removed`, `failed`, `authFlush`) for diagnostics. It is
 not surfaced in the UI.
 
+## The UI is a side panel
+
+The extension opens in Chrome's **side panel**, not a toolbar popup. Click the toolbar icon
+to open it; it stays open while you click around the page and while you switch tabs, and
+closes only via the panel's own close button or the toolbar icon.
+
+This is deliberate and not a preference. Chrome documents that an action popup "automatically
+close[s] when the user focuses on some portion of the browser outside of the popup" and that
+"there is no way to keep the popup open after the user has clicked away" — a Chromium feature
+request for a lock API was rejected. A side panel is the only surface that survives losing
+focus, so the panel is what makes a switch observable: it stays up and repaints to the new
+active user instead of vanishing on click.
+
 ## Private windows are a separate session
 
 A private (incognito) window runs its **own** signed-in user, independent of your normal
@@ -95,7 +108,7 @@ was — and vice versa. That gives you two live users at once without the ↗ bu
 stateless-site caveat, because Chrome gives private windows their own cookie jar and their
 own HTTP auth cache.
 
-The status bar in the popup shows `private` so you can tell which session you are looking
+The status bar in the side panel shows `private` so you can tell which session you are looking
 at.
 
 Your **users and domains are shared** with private windows — you do not have to re-add
@@ -162,7 +175,7 @@ Switching on UAT clears and reloads only UAT — your DEV and PROD sessions are 
 
 ## Which scheme am I on?
 
-After one login attempt, the popup tells you (Basic / Digest / NTLM / Negotiate). To check
+After one login attempt, the side panel tells you (Basic / Digest / NTLM / Negotiate). To check
 manually: DevTools → Network → the `401` request → Response Headers → `WWW-Authenticate`.
 
 - **Basic** → you may optionally enable pre-emptive credentials for faster switching.
@@ -197,7 +210,7 @@ path.
 | File | Role |
 |---|---|
 | `manifest.json` | MV3 manifest, permissions |
-| `background.js` | `onAuthRequired` handler, DNR rule sync, switching, scoped site-data clear |
+| `background.js` | `onAuthRequired` handler, DNR rule sync, switching, scoped site-data clear, side-panel behavior |
 | `storage.js` | Canonical storage shape, profile isolation (`INSTANCE_AREA`) |
 | `backup.js` | Export/import crypto, merge, domain normalization |
 | `popup.html/.css/.js` | Session list and settings UI |

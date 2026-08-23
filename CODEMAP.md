@@ -16,7 +16,7 @@ problem it solves is Chrome's in-memory **HTTP auth cache**, which survives tab 
 - **Finding code**: Go to the relevant domain section → `file:line` → open directly.
 - **Before editing a function**: Read its entry in the [Function Dependency Index](#function-dependency-index) to see what callers will be affected.
 - **After editing**: Run `/codemap update <changed-file>` to keep the map accurate.
-- **Verifying**: `npm test` — 25 checks. The suite is the safety net, not this document.
+- **Verifying**: `npm test` — 26 checks. The suite is the safety net, not this document.
 
 ---
 
@@ -58,9 +58,15 @@ problem it solves is Chrome's in-memory **HTTP auth cache**, which survives tab 
 | `background.js` | 280 | `reloadTabsIn()` — reloads affected tabs |
 | `background.js` | 312 | `openAs()` — pins a new tab to a specific user |
 
-### Popup UI
+### Side panel UI
 
 > Renders the domain picker, the active user, the switch list, and settings.
+>
+> Hosted in `chrome.sidePanel`, not an action popup. Chrome closes a popup on focus loss and
+> documents that as unavoidable, so `manifest.action` deliberately has **no** `default_popup`
+> — that is what lets `setPanelBehavior({openPanelOnActionClick:true})` bind the toolbar icon
+> to the panel. `test/wiring.test.mjs` fails the build if `default_popup` returns, if
+> `setPanelBehavior` disappears, or if `window.close()` shows up in `popup.js`.
 
 | File | Line | What it is |
 |------|------|------------|
@@ -70,7 +76,7 @@ problem it solves is Chrome's in-memory **HTTP auth cache**, which survives tab 
 | `popup.js` | 127 | `buildRow()` — one user row with edit/open/delete |
 | `popup.js` | 203 | `openUserForm()` — shared add/edit form |
 | `popup.js` | 40 | `currentDomain()` — selected tab, falling back to first domain |
-| `popup.html` | 1 | Popup markup |
+| `popup.html` | 1 | Side panel markup (also the `side_panel.default_path`) |
 | `popup.css` | 10 | Styles; the --user custom property is set per active user from JS |
 
 ### Backup (export / import)
@@ -114,7 +120,8 @@ problem it solves is Chrome's in-memory **HTTP auth cache**, which survives tab 
 | Browser start / extension install | `background.js` | 386 |
 | Auth challenge from any site | `background.js` | 160 |
 | Message from popup | `background.js` | 349 |
-| Popup opened | `popup.js` | 544 |
+| Side panel opened | `popup.js` | end of file (`load()`) |
+| Worker state changed while panel is open | `popup.js` | `storage.onChanged` repaint listener |
 
 ---
 

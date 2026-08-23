@@ -135,6 +135,14 @@ its rule failed to install - in pre-emptive mode the credential header overrides
 and no flush is needed.
 ```
 
+**`sidePanel`**
+```
+Displays the extension's own UI in Chrome's side panel. Chrome closes an action popup as
+soon as focus leaves it and documents that as unavoidable, which made a switch impossible
+to observe - the UI vanished on click. The side panel stays open and updates in place. It
+renders only the extension's own page and never reads or touches page content.
+```
+
 **`storage`**
 ```
 Stores the user's list of logins and domains.
@@ -232,7 +240,7 @@ ADD TWO ACCOUNTS
    Save.
 
 VERIFY THE FIRST ACCOUNT
-7. The popup shows "Signed in as" one of the two. Click the other name to make Alice the
+7. The side panel shows "Signed in as" one of the two. Click the other name to make Alice the
    active user, then open this URL in a tab:
 
       https://httpbin.org/basic-auth/alice/wonderland
@@ -242,8 +250,8 @@ VERIFY THE FIRST ACCOUNT
    The extension answered the 401 challenge on your behalf.
 
 VERIFY SWITCHING
-8. Open the extension popup and click "Bob".
-   The popup closes, the tab reloads, and the popup now reads "Signed in as Bob".
+8. Click the toolbar icon to open the side panel, then click "Bob".
+   The panel stays open and updates to "Signed in as Bob" as the tab reloads behind it.
 9. Open this URL:
 
       https://httpbin.org/basic-auth/bob/builder
@@ -274,7 +282,7 @@ OPTIONAL - Digest authentication
 
 OPTIONAL - private window isolation
 13. Enable "Allow in Incognito" for the extension at chrome://extensions -> Details.
-    Open a private window, open the popup there and switch to a different user than the
+    Open a private window, open the side panel there and switch to a different user than the
     one selected in your normal window.
     Expected: each window keeps its own signed-in user independently.
 

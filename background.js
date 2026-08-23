@@ -359,9 +359,22 @@ if (IS_INCOGNITO) {
   });
 }
 
-chrome.runtime.onInstalled.addListener(syncRules);
-chrome.runtime.onStartup.addListener(syncRules);
+// The UI is a side panel, not an action popup: Chrome closes a popup the moment focus
+// leaves it and documents that as unavoidable ("there is no way to keep the popup open
+// after the user has clicked away"). A side panel stays put until it is closed. With no
+// default_popup in the manifest, this is what makes the toolbar icon open the panel.
+async function enableSidePanel() {
+  try {
+    await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+  } catch (e) {
+    console.warn("side panel behavior could not be set", e);
+  }
+}
+
+chrome.runtime.onInstalled.addListener(() => { syncRules(); enableSidePanel(); });
+chrome.runtime.onStartup.addListener(() => { syncRules(); enableSidePanel(); });
 
 migrate()
   .then(syncRules)
+  .then(enableSidePanel)
   .catch((e) => console.warn("startup sync failed", e));
