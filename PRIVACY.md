@@ -18,7 +18,6 @@ Everything below happens entirely inside your own copy of Chrome.
 | Which user is currently selected per domain | To know who to sign in as | Session storage, per browser profile |
 | The authentication scheme a site asked for (Basic / Digest / NTLM / Negotiate) | To warn you when a setting is unsafe for your site | Session storage, per browser profile |
 | Hosts that prompted for credentials but are not configured | To offer them as a one-click suggestion. Capped at 3, most recent first | `chrome.storage.local`, on your machine |
-| A temporary copy of your browser cookies | See "The cookie snapshot" below | Session or local storage, deleted immediately after use |
 
 ## How your credentials are used
 
@@ -34,20 +33,30 @@ Two restrictions are enforced in code:
   puts the password on the wire in a trivially reversible encoding. Intranet addresses are
   exempt, since internal http-only tools are the reason this extension exists.
 
-## The cookie snapshot
+## What a switch deletes
 
-Switching users requires clearing Chrome's HTTP authentication cache. Chrome offers no way
-to clear that cache for one site, so the only available lever clears cookies for everything.
-To avoid signing you out of every other site you use, the extension copies your other
-cookies, performs the clear, and writes them straight back.
+Switching users deletes data for **the domain you are switching on, and nothing else**.
+Cookies for that domain and its subdomains are removed individually; its HTTP cache,
+`localStorage`, IndexedDB, CacheStorage and service workers are cleared. Your other sites
+are not touched, and their cookies are never read — the read is scoped to the target domain
+at the API level.
 
-That copy exists only for the seconds a switch takes, and is deleted as soon as the cookies
-are restored. It is written to extension storage rather than held in memory so that it can
-survive Chrome shutting the extension's background process down mid-switch — without that,
-an unlucky moment would lose every login you have. It is never transmitted anywhere.
+Earlier versions worked differently: they cleared every cookie in your profile and wrote the
+other sites' cookies back afterwards, which meant a copy of every cookie you held was
+written to extension storage — unencrypted, on disk, in a normal window — for the seconds a
+switch took. **That no longer happens.** Nothing is copied, stored or restored.
 
-**In a normal window this copy is written to disk unencrypted while it exists.** In a private
-window it is held in memory only.
+### The one exception: the auth-cache flush
+
+Chrome's HTTP authentication cache is what keeps you signed in as the previous user, and the
+only lever that drops it also deletes cookies for the whole **registrable domain**. Flushing
+`k2.corp.com` therefore also signs you out of `jira.corp.com`. Sites outside that registrable
+domain are never affected.
+
+The extension only pays that cost when it has to. In pre-emptive mode the credential header
+it attaches overrides the cache outright, so no flush is issued at all. The flush happens
+only when pre-emptive is off, or when Chrome rejected the rule — the cases where the switch
+would otherwise silently keep serving the previous user.
 
 ## Storage is not encrypted
 
@@ -64,8 +73,8 @@ time.
 
 ## Private windows
 
-A private window runs a separate instance with its own selected user, its own cookie
-snapshot, and its own diagnostics, none of which are written to disk. Your saved user list
+A private window runs a separate instance with its own selected user and its own
+diagnostics, neither of which is written to disk. Your saved user list
 and domain list are deliberately shared with private windows so you do not have to type them
 twice.
 
@@ -93,9 +102,9 @@ domains can be deleted at any time from the extension's own interface.
 |---|---|
 | `webRequest`, `webRequestAuthProvider` | The only way to answer an HTTP authentication challenge programmatically |
 | `declarativeNetRequest` | Optional pre-emptive mode: attaches the credential header so no challenge occurs |
-| `cookies` | To copy and restore your other sites' cookies around the required clear |
-| `browsingData` | To clear the HTTP authentication cache, which is what makes switching work |
-| `storage`, `unlimitedStorage` | To hold your users and domains, and the temporary cookie snapshot |
+| `cookies` | To delete the selected domain's own cookies, one by one. Other sites' cookies are never read |
+| `browsingData` | To clear the selected domain's web storage, and to flush the HTTP auth cache for that domain when nothing else can make a switch take effect |
+| `storage` | To hold your users and domains |
 | `tabs` | To reload the affected tabs after a switch, and to offer the current tab's domain |
 | `<all_urls>` | The authentication listener must be registered before you configure any domain, so it cannot be scoped in advance. Credentials are only ever supplied to the domains you configure |
 

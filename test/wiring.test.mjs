@@ -13,7 +13,7 @@ const bg = read("background.js");
 
 const fail = [];
 
-for (const p of ["storage", "tabs", "cookies", "browsingData", "unlimitedStorage",
+for (const p of ["storage", "tabs", "cookies", "browsingData",
                  "webRequest", "webRequestAuthProvider", "declarativeNetRequest"]) {
   if (!manifest.permissions.includes(p)) fail.push(`manifest missing "${p}" permission`);
 }
@@ -85,10 +85,9 @@ if (/const DEFAULTS =/.test(bg + js)) {
 }
 if (/id="preemptive" checked/.test(html)) fail.push("preemptive checkbox still checked in HTML");
 if (/const attempted = new Set/.test(bg)) fail.push("auth retry guard back in worker memory");
-// Goes through INSTANCE_AREA, not storage.local: a private window's cookies must never
-// be written to disk, let alone restored into the normal profile.
-if (!/INSTANCE_AREA\.set\(\{ \[SNAPSHOT_KEY\]/.test(bg)) fail.push("cookie snapshot no longer persisted");
-if (/storage\.local\.set\(\{ \[SNAPSHOT_KEY\]/.test(bg)) fail.push("cookie snapshot bypasses INSTANCE_AREA");
+// The whole point of this design: no other site's cookies are ever read, stored or wiped.
+if (/SNAPSHOT_KEY|cookieSnapshot/.test(bg)) fail.push("cookie snapshot is back — other sites must never be touched");
+if (/unlimitedStorage/.test(JSON.stringify(manifest))) fail.push("unlimitedStorage back without a snapshot to justify it");
 
 // Diagnostics written from the incognito instance must not land in shared storage.local.
 for (const key of ["lastScheme", "ruleError", "lastReset"]) {
@@ -97,15 +96,32 @@ for (const key of ["lastScheme", "ruleError", "lastReset"]) {
   }
 }
 
-const clearBody = bg.slice(bg.indexOf("async function clearAuthCache"));
-const snapshotAt = clearBody.indexOf("SNAPSHOT_KEY");
-const removeAt = clearBody.indexOf("browsingData.remove");
-if (snapshotAt === -1 || removeAt === -1 || snapshotAt > removeAt) {
-  fail.push("snapshot must be persisted BEFORE cookies are cleared");
+// A global browsingData cookie clear is what logged people out of rotating-cookie sites.
+// Scan code only — comments below quote these very patterns.
+const bgCode = bg.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+const removeCalls = bgCode.match(/browsingData\.remove\([\s\S]*?\);/g) ?? [];
+if (!removeCalls.length) fail.push("no browsingData.remove found — guard is looking at the wrong thing");
+for (const call of removeCalls) {
+  if (!/origins:/.test(call)) fail.push("browsingData.remove without an origins filter is global");
+  // `cache` is origin-scoped like the rest, but only while the origins filter is present —
+  // which the check above already enforces for every call.
+}
+
+// The auth-cache flush is the one destructive step left. It must stay behind the flag, so a
+// switch that does not need it cannot sign the user out of sibling subdomains.
+if (!/if \(flushAuthCache\) types\.cookies = true;/.test(bgCode)) {
+  fail.push("auth-cache flush must stay conditional on flushAuthCache");
+}
+if (/cookies:\s*true/.test(bgCode)) fail.push("unconditional cookies:true — flush must go through the flag");
+
+const clearBody = bgCode.slice(bgCode.indexOf("async function clearSiteData"));
+if (!/cookies\.getAll\(\{ domain: /.test(clearBody)) {
+  fail.push("cookie read must be scoped to the target domain, not getAll({})");
 }
 
 if (fail.length) {
   console.error("  FAIL\n" + fail.map((f) => "        " + f).join("\n"));
   process.exit(1);
 }
-console.log(`  PASS  manifest, ${ids.length} DOM ids, ${usedClasses.size} CSS classes, messages [${sent}], 10 regression guards`);
+console.log(`  PASS  manifest, ${ids.length} DOM ids, ${usedClasses.size} CSS classes, messages [${sent}], 14 regression guards`);

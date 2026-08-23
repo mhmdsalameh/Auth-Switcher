@@ -19,7 +19,7 @@ const SRC =
 
 function makeChrome({ localStore = {}, sessionStore = {}, cookies = [] } = {}) {
   const calls = {
-    browsingDataRemove: [], cookieSetFails: false, blockSnapshotWrite: false,
+    browsingDataRemove: [], cookieRemoveFails: false, getAllQueries: [],
     rules: [], onAuthRequired: null
   };
 
@@ -38,10 +38,7 @@ function makeChrome({ localStore = {}, sessionStore = {}, cookies = [] } = {}) {
       for (const k of Object.keys(query)) if (k in store) out[k] = store[k];
       return structuredClone(out);
     },
-    async set(obj) {
-      if (calls.blockSnapshotWrite && "cookieSnapshot" in obj) throw new Error("QUOTA_BYTES");
-      Object.assign(store, structuredClone(obj));
-    },
+    async set(obj) { Object.assign(store, structuredClone(obj)); },
     async remove(key) { delete store[key]; },
     onChanged: { addListener() {} }
   });
@@ -49,29 +46,31 @@ function makeChrome({ localStore = {}, sessionStore = {}, cookies = [] } = {}) {
   const chrome = {
     storage: { local: area(localStore), session: area(sessionStore) },
     cookies: {
-      async getAll() { return structuredClone(cookies); },
-      async set(details) {
-        if (calls.cookieSetFails) return null; // Chrome returns null on failure
-        const host = details.domain ?? new URL(details.url).hostname;
-        // Chrome upserts on (name, domain, path) rather than appending.
+      // Mirrors Chrome: the `domain` filter matches that domain and its subdomains.
+      async getAll(query = {}) {
+        calls.getAllQueries.push(structuredClone(query));
+        const d = query.domain;
+        const match = (c) => {
+          const h = c.domain.replace(/^\./, "");
+          return !d || h === d || h.endsWith("." + d);
+        };
+        return structuredClone(cookies.filter(match));
+      },
+      async remove({ url, name }) {
+        if (calls.cookieRemoveFails) return null; // Chrome returns null on failure
+        const host = new URL(url).hostname;
         const i = cookies.findIndex(
-          (c) => c.name === details.name && c.domain === host && c.path === details.path
+          (c) => c.name === name && c.domain.replace(/^\./, "") === host
         );
-        if (i !== -1) cookies.splice(i, 1);
-        cookies.push({
-          domain: details.domain ?? new URL(details.url).hostname,
-          hostOnly: !details.domain,
-          name: details.name, value: details.value, path: details.path,
-          secure: !!details.secure, httpOnly: !!details.httpOnly,
-          sameSite: details.sameSite ?? "unspecified", storeId: details.storeId ?? "0"
-        });
-        return details;
+        if (i === -1) return null;
+        cookies.splice(i, 1);
+        return { url, name };
       }
     },
     browsingData: {
       async remove(opts, types) {
         calls.browsingDataRemove.push({ opts, types });
-        if (types.cookies && !opts.origins) cookies.length = 0;
+        if (types.cookies && !opts.origins) cookies.length = 0; // the global wipe we must never do
       }
     },
     declarativeNetRequest: {
@@ -106,65 +105,98 @@ const seed = () => [
 ];
 
 const tests = {
-  async "in-scope cookies dropped, everything else restored"() {
+  async "the selected domain's http cache is cleared, scoped to its origins"() {
+    const env = makeChrome({ cookies: seed() });
+    await (await boot(env)).clearSiteData(["k2.corp.com"]);
+
+    const withCache = env.calls.browsingDataRemove.filter((r) => r.types.cache);
+    assert.equal(withCache.length, 1, "the domain's own cache must actually be cleared");
+    assert.deepEqual(withCache[0].opts.origins, ["https://k2.corp.com", "http://k2.corp.com"]);
+  },
+
+  async "only the selected domain is touched"() {
     const env = makeChrome({ cookies: seed() });
     const ctx = await boot(env);
-    await ctx.clearAuthCache(["k2.corp.com"]);
+    await ctx.clearSiteData(["k2.corp.com"]);
 
     const names = env.cookies.map((c) => c.name).sort();
-    assert.deepEqual(names, ["JSESSIONID", "SID"], "other sites must survive, K2 must not");
-    assert.equal(env.localStore.lastReset.restored, 2);
-    assert.equal(env.localStore.lastReset.lost, 0);
-    assert.ok(!("cookieSnapshot" in env.localStore), "snapshot cleared on success");
+    assert.deepEqual(names, ["JSESSIONID", "SID"], "other sites must be left completely alone");
+    assert.equal(env.localStore.lastReset.removed, 1);
+    assert.equal(env.localStore.lastReset.failed, 0);
   },
 
-  async "snapshot survives a worker kill and recovers on next boot"() {
+  async "no global cookie wipe is ever issued"() {
     const env = makeChrome({ cookies: seed() });
-    env.calls.cookieSetFails = true; // restore cannot complete
-    await (await boot(env)).clearAuthCache(["k2.corp.com"]);
+    const ctx = await boot(env);
+    await ctx.clearSiteData(["k2.corp.com"], { flushAuthCache: true });
 
-    assert.equal(env.cookies.length, 0, "cookies are gone at this point");
-    assert.equal(env.localStore.cookieSnapshot.cookies.length, 2, "snapshot persisted before the clear");
+    assert.ok(env.calls.browsingDataRemove.length > 0, "a clear was issued");
+    for (const { opts, types } of env.calls.browsingDataRemove) {
+      assert.ok(Array.isArray(opts.origins) && opts.origins.length, "must always be origin-scoped");
+    }
+    assert.equal(env.cookies.length, 2, "the origins-scoped flush must not wipe the profile");
+  },
 
-    env.calls.cookieSetFails = false;
-    await boot(env); // worker spins back up; auto-recovery runs on its own
+  async "the auth cache is only flushed when the DNR header cannot do the job"() {
+    const ctx = await boot(makeChrome());
+    assert.equal(await ctx.needsAuthFlush(false), true, "pre-emptive off: cache is the only answer");
+    assert.equal(await ctx.needsAuthFlush(true), false, "live DNR header overrides the cache");
+
+    // Set after boot: syncRules() clears ruleError on every successful spin-up.
+    const broken = makeChrome();
+    const brokenCtx = await boot(broken);
+    broken.localStore.ruleError = "rule rejected";
+    assert.equal(await brokenCtx.needsAuthFlush(true), true, "rejected rule means no header is sent");
+  },
+
+  async "the flush is skipped entirely when pre-emptive is live"() {
+    const env = makeChrome({ cookies: seed() });
+    await (await boot(env)).clearSiteData(["k2.corp.com"], { flushAuthCache: false });
+
+    for (const { types } of env.calls.browsingDataRemove) {
+      assert.ok(!types.cookies, "no flush means sibling subdomains keep their cookies");
+    }
+    assert.equal(env.localStore.lastReset.authFlush, false);
+  },
+
+  async "other sites' cookies are never even read"() {
+    const env = makeChrome({ cookies: seed() });
+    await (await boot(env)).clearSiteData(["k2.corp.com"]);
+
+    assert.ok(env.calls.getAllQueries.length > 0, "getAll was called");
+    for (const q of env.calls.getAllQueries) {
+      assert.equal(q.domain, "k2.corp.com", "every read must be scoped to the target domain");
+    }
+  },
+
+  async "nothing is snapshotted or restored"() {
+    const env = makeChrome({ cookies: seed() });
+    await (await boot(env)).clearSiteData(["k2.corp.com"]);
+
+    assert.ok(!("cookieSnapshot" in env.localStore), "no cookie snapshot may be written to disk");
+  },
+
+  async "subdomain cookies of the target domain are cleared too"() {
+    const env = makeChrome({
+      cookies: [
+        ...seed(),
+        { domain: ".k2.corp.com", hostOnly: false, name: "WIDE", value: "d", path: "/", secure: true, httpOnly: true, sameSite: "lax", storeId: "0" },
+        { domain: "uat.k2.corp.com", hostOnly: true, name: "SUB", value: "e", path: "/", secure: true, httpOnly: true, sameSite: "lax", storeId: "0" }
+      ]
+    });
+    await (await boot(env)).clearSiteData(["k2.corp.com"]);
 
     assert.deepEqual(env.cookies.map((c) => c.name).sort(), ["JSESSIONID", "SID"]);
-    assert.ok(!("cookieSnapshot" in env.localStore), "snapshot consumed once restored");
   },
 
-  async "hostOnly and SameSite=None are preserved through the round trip"() {
+  async "a cookie that refuses to delete is reported, not retried forever"() {
     const env = makeChrome({ cookies: seed() });
-    await (await boot(env)).clearAuthCache(["k2.corp.com"]);
+    env.calls.cookieRemoveFails = true;
+    await (await boot(env)).clearSiteData(["k2.corp.com"]);
 
-    const gmail = env.cookies.find((c) => c.name === "SID");
-    const jira = env.cookies.find((c) => c.name === "JSESSIONID");
-    assert.equal(gmail.hostOnly, false, "domain cookie must not become hostOnly");
-    assert.equal(gmail.sameSite, "no_restriction");
-    assert.equal(jira.hostOnly, true, "hostOnly cookie must stay hostOnly");
-  },
-
-  async "permanently failing restores give up instead of retrying forever"() {
-    const env = makeChrome({ cookies: seed() });
-    env.calls.cookieSetFails = true;
-    await (await boot(env)).clearAuthCache(["k2.corp.com"]); // attempt 1
-    assert.equal(env.localStore.cookieSnapshot.attempts, 1);
-
-    await boot(env); // auto-recovery, attempt 2
-    assert.equal(env.localStore.cookieSnapshot.attempts, 2);
-
-    await boot(env); // auto-recovery, attempt 3 == cap
-    assert.ok(!("cookieSnapshot" in env.localStore), "snapshot dropped at the attempt cap");
-  },
-
-  async "a failed snapshot write aborts before anything destructive happens"() {
-    const env = makeChrome({ cookies: seed() });
-    env.calls.blockSnapshotWrite = true;
-    await (await boot(env)).clearAuthCache(["k2.corp.com"]);
-
-    assert.equal(env.calls.browsingDataRemove.length, 0, "must not clear without a recovery path");
-    assert.equal(env.cookies.length, 3, "nothing lost");
-    assert.match(env.localStore.lastReset.aborted, /QUOTA_BYTES/);
+    assert.equal(env.localStore.lastReset.removed, 0);
+    assert.equal(env.localStore.lastReset.failed, 1);
+    assert.ok(!("cookieSnapshot" in env.localStore));
   },
 
   async "v1 flat sessions migrate onto the first domain"() {

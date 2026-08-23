@@ -117,27 +117,27 @@ user-configured domains and are anchored to https:// for any public host.
 
 **`cookies`**
 ```
-Switching users requires clearing Chrome's HTTP auth cache. Chrome exposes no origin-
-scoped API for that cache; a global cookie clear is the only available lever. To avoid
-signing the user out of every unrelated site, the extension reads the user's cookies,
-performs the clear, then immediately writes back every cookie outside the configured
-domains. Reading them is the only way to restore them.
+To delete the selected domain's own cookies when the user switches accounts, so the
+previous user's session does not carry over. Cookies are read with a domain-scoped
+getAll() and removed individually, so cookies belonging to sites the user did not
+configure are never read, never stored and never deleted.
 ```
 
 **`browsingData`**
 ```
-Performs the cookie clear described above, which is what drops the HTTP auth cache and
-makes a switch take effect. Also clears localStorage, IndexedDB, cache storage and service
-workers for the user's configured domains only, so the previous user's session state does
-not leak into the next one.
+Clears the HTTP cache, localStorage, IndexedDB, cache storage and service workers for the user's
+configured domains only, so the previous user's session state does not leak into the next
+one. Every call carries an origins filter; none is ever global.
+
+The same call additionally flushes Chrome's HTTP auth cache for those origins, which is
+what makes a switch take effect. That step is only issued when pre-emptive mode is off or
+its rule failed to install - in pre-emptive mode the credential header overrides the cache
+and no flush is needed.
 ```
 
-**`storage` + `unlimitedStorage`**
+**`storage`**
 ```
-Stores the user's list of logins and domains, and the temporary cookie snapshot taken
-during a switch. unlimitedStorage is required because that snapshot can contain thousands
-of cookies on an established profile and would otherwise exceed the storage quota, which
-would abort the switch.
+Stores the user's list of logins and domains.
 ```
 
 **`tabs`**
@@ -149,36 +149,27 @@ a domain. Tab contents are never read or injected into.
 
 **Host permission `<all_urls>`**
 ```
-This permission is used to put the user's cookies back after a switch. It is not used to
-access the sites those cookies belong to.
+This permission is required by the authentication listener, not by the cookie code.
 
-Switching accounts requires clearing Chrome's HTTP auth cache. Chrome provides no API to
-clear that cache for a single origin. The only mechanism that clears it is
-chrome.browsingData.remove with cookies:true, and that call is global: it deletes every
-cookie in the profile, for every site, and it does so whether or not the extension holds
-host permissions.
+chrome.webRequest.onAuthRequired must be registered when the service worker starts, which
+is before the user has configured any domain, and it can only observe hosts the extension
+holds permission for. A newly added domain has to work immediately, without the user
+reinstalling the extension or restarting Chrome, so the listener cannot be scoped in
+advance to a list that does not exist yet.
 
-So the extension reads all cookies first, performs the clear, and immediately writes back
-every cookie belonging to a site the user did not configure. The user stays signed in to
-their email, their issue tracker, and everything else.
+The listener supplies credentials only to domains the user explicitly added. Every other
+host is observed and passed through untouched, and is recorded only as a one-click
+suggestion (capped at 3) so the user can add it if they want to.
 
-chrome.cookies.getAll only returns cookies for origins the extension holds host access
-to. This produces an asymmetry that is the entire reason for the broad permission:
-
-  - browsingData.remove deletes everything, regardless of host permissions.
-  - cookies.getAll can only read, and therefore only restore, what it has access to.
-
-With a narrower host permission the destructive half of that pair would still run at full
-scope while the recovery half could only cover the user's own configured domains. The
-result would be that every unrelated session the user has is destroyed on every switch,
-with no way to recover it. The broad permission is what makes the feature safe, not what
-makes it risky.
+Cookie access is scoped to the user's configured domains via
+chrome.cookies.getAll({domain}). The extension does not read cookies for any other site.
+```
 
 Scope limits, all enforced in code:
   - Credentials are only ever supplied to domains the user explicitly added. Every other
     host is passed through untouched.
-  - Cookies outside those domains are only read in order to be written back unchanged,
-    within the same operation. They are never inspected, transmitted or retained.
+  - Cookies outside the configured domains are never read, stored, transmitted or
+    deleted. No global browsingData clear is ever issued.
   - No page content is read. No scripts are injected. No content scripts are declared.
   - The extension makes no network requests of its own and contacts no server.
 ```
@@ -269,10 +260,9 @@ VERIFY OTHER SESSIONS SURVIVE THE SWITCH
 11. Switch users in the extension, then reload that unrelated site.
     Expected: you are still signed in there.
 
-    Switching clears Chrome's HTTP auth cache, and the only API that does so clears all
-    cookies globally. The extension snapshots every cookie outside the configured domains
-    and restores it immediately afterwards. This step demonstrates that the broad host
-    permission is used for restoring the user's sessions, not for accessing those sites.
+    Switching deletes data only for the selected domain. Cookies are read with a
+    domain-scoped getAll() and removed one at a time, and every browsingData call carries
+    an origins filter, so no other site's cookies are read or deleted at any point.
 
 OPTIONAL - Digest authentication
 12. Add domain httpbin.org (already added) and a user with username "digestuser" and
@@ -356,6 +346,7 @@ the honest answer is already written down.
 | Finding | Status |
 |---|---|
 | Credentials stored unencrypted at rest | Disclosed in listing, privacy policy and UI. Encrypting behind a user passphrase is the fix if this ever goes public. |
-| Cookie snapshot written to disk unencrypted during a switch | Disclosed. Fix is `storage.session` + `chrome.alarms` for crash recovery. |
+| Cookie snapshot written to disk unencrypted during a switch | **Fixed.** The global clear and its snapshot are gone; a switch now deletes only the selected domain and copies nothing. |
+| Auth-cache flush also clears sibling subdomains under the same registrable domain | Open, and inherent to Chrome: `origins` is widened to eTLD+1 for cookies. Only issued when pre-emptive mode cannot do the job instead. |
 | Pre-emptive DNR rules lack `initiatorDomains` (CSRF amplifier) | Open. Needs two rules — navigations unrestricted, subresources initiator-scoped — and real browser testing. Only applies when pre-emptive is enabled, which is off by default. |
 | Any other extension with `webRequest` can read the injected header | Inherent to Chrome's model. Documented in the README. |

@@ -21,10 +21,6 @@ export const INSTANCE_DEFAULTS = {
   insecureHost: null
 };
 
-// Deliberately not in STORAGE_DEFAULTS: the snapshot can hold thousands of cookies, and
-// getConfig() runs on every auth challenge. It is read explicitly, only when needed.
-export const SNAPSHOT_KEY = "cookieSnapshot";
-
 // ---- Profile isolation -----------------------------------------------------
 
 // The manifest asks for split incognito, so Chrome runs a second, independent instance of

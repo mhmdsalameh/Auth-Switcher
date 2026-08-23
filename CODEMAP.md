@@ -16,7 +16,7 @@ problem it solves is Chrome's in-memory **HTTP auth cache**, which survives tab 
 - **Finding code**: Go to the relevant domain section → `file:line` → open directly.
 - **Before editing a function**: Read its entry in the [Function Dependency Index](#function-dependency-index) to see what callers will be affected.
 - **After editing**: Run `/codemap update <changed-file>` to keep the map accurate.
-- **Verifying**: `npm test` — 23 checks. The suite is the safety net, not this document.
+- **Verifying**: `npm test` — 25 checks. The suite is the safety net, not this document.
 
 ---
 
@@ -51,22 +51,12 @@ problem it solves is Chrome's in-memory **HTTP auth cache**, which survives tab 
 
 | File | Line | What it is |
 |------|------|------------|
-| `background.js` | 326 | `switchTo()` — the main entry; scoped to one domain |
-| `background.js` | 282 | `clearAuthCache()` — global cookie clear with out-of-scope preservation |
-| `background.js` | 310 | `clearSiteState()` — localStorage/IDB/SW for the target domain |
-| `background.js` | 318 | `reloadTabsIn()` — reloads affected tabs |
-| `background.js` | 340 | `openAs()` — pins a new tab to a specific user |
-
-### Cookie snapshot / crash recovery
-
-> Makes the destructive global cookie clear survive service-worker termination.
-
-| File | Line | What it is |
-|------|------|------------|
-| `background.js` | 257 | `restoreSnapshot()` — idempotent write-back, capped retries |
-| `background.js` | 252 | `MAX_RESTORE_ATTEMPTS` — retry cap (`SNAPSHOT_KEY` lives in `storage.js`) |
-| `background.js` | 232 | `toSetDetails()` — `cookies.get` → `cookies.set` shape conversion |
-| `background.js` | 226 | `cookieUrl()` — reconstructs a URL from a cookie record |
+| `background.js` | 299 | `switchTo()` — the main entry; scoped to one domain |
+| `background.js` | 236 | `clearSiteData()` — deletes only the target domain's cookies + web storage |
+| `background.js` | 293 | `needsAuthFlush()` — decides whether the auth-cache flush is required |
+| `background.js` | 225 | `cookieUrl()` — reconstructs a URL from a cookie record, for `cookies.remove` |
+| `background.js` | 280 | `reloadTabsIn()` — reloads affected tabs |
+| `background.js` | 312 | `openAs()` — pins a new tab to a specific user |
 
 ### Popup UI
 
@@ -104,7 +94,6 @@ problem it solves is Chrome's in-memory **HTTP auth cache**, which survives tab 
 |------|------|------------|
 | `storage.js` | 6 | `STORAGE_DEFAULTS` — **single** canonical shape of shared `storage.local` |
 | `storage.js` | 17 | `INSTANCE_DEFAULTS` — per-instance diagnostics; never shared across profiles |
-| `storage.js` | 26 | `SNAPSHOT_KEY` — kept out of the defaults on purpose |
 | `storage.js` | 37 | `IS_INCOGNITO` — which profile instance this code is running in |
 | `storage.js` | 39 | `INSTANCE_AREA` — storage area that must not cross the profile boundary |
 | `storage.js` | 60 | `readInstanceState()` — the popup's read path for the diagnostics |
@@ -138,7 +127,7 @@ problem it solves is Chrome's in-memory **HTTP auth cache**, which survives tab 
 | `Session` | `storage.js:6` | `{id, domain, name, username, password, color}` |
 | `activeByDomain` | `storage.js:6` | `{domain → sessionId}`, one active user per domain **per profile instance** |
 | `tabAssignments` | `storage.session` | `{tabId → sessionId}`, dies with the browser |
-| `cookieSnapshot` | `storage.js:26`, shape at `background.js:264` | `{cookies: SetDetails[], attempts: number}` |
+| `lastReset` | `background.js:272` | `{at, domains, removed, failed, authFlush}` — diagnostics only, not rendered |
 | Backup file v1 | `backup.js:43` | `{format, version, encrypted, kdf?, iv?, data?, payload?}` |
 
 ### Storage areas — persistence matters here
@@ -147,7 +136,7 @@ problem it solves is Chrome's in-memory **HTTP auth cache**, which survives tab 
 |------|------|------------------|------------------------------|
 | `storage.local` | `sessions`, `domains`, `selectedDomain`, `preemptive`, `seenChallenges` | yes | **yes** |
 | `storage.session` | `tabAssignments`, `authAttempts` | no (by design) | no |
-| `INSTANCE_AREA` (`storage.js:39`) | `activeByDomain`, `cookieSnapshot`, `lastScheme`, `ruleError`, `lastReset`, `insecureHost` | normal profile only | no |
+| `INSTANCE_AREA` (`storage.js:35`) | `activeByDomain`, `lastScheme`, `ruleError`, `lastReset`, `insecureHost` | normal profile only | no |
 
 `INSTANCE_AREA` resolves to `storage.local` in the normal profile and `storage.session` in a
 private window - see *Profile isolation* below. Never read or write those keys through
@@ -215,26 +204,38 @@ adding it there; `test/wiring.test.mjs` fails if the popup sends something unhan
 - **Side effects**: none
 - **Change note**: merges local and session storage into one object, then overrides `activeByDomain` with this instance's own copy — that override is what keeps a private window off the normal window's user. The shape lives in `storage.js:6` and is imported by both the worker and the popup — add new keys there, not locally. `test/wiring.test.mjs` fails if either file redeclares `DEFAULTS`.
 
-#### `clearAuthCache(domains)`
-- **Defined**: `background.js:282`
-- **Impact**: high — destructive
-- **Called by**: `switchTo` (337)
-- **Calls**: `hostInScope` (289), `toSetDetails` (289), `restoreSnapshot` (306)
-- **Side effects**: **clears every cookie in the calling instance's profile**, then restores out-of-scope ones. Under split incognito that is the private profile only — `cookies.getAll` and `browsingData.remove` both resolve against the calling context.
-- **Change note**: the snapshot must be persisted *before* `browsingData.remove`. `test/wiring.test.mjs` asserts that ordering; if the write fails the clear is abandoned deliberately.
+#### `clearSiteData(domains, { flushAuthCache })`
+- **Defined**: `background.js:236`
+- **Impact**: high — the only destructive path left
+- **Called by**: `switchTo` (306)
+- **Calls**: `chrome.cookies.getAll({domain})`, `cookieUrl` (250), `chrome.cookies.remove`, `hostInScope` (245), `originsFor`
+- **Side effects**: deletes the target domain's cookies and web storage; writes `lastReset`
+- **Change note**: the guarantee is that **nothing outside `domains` is read, written or
+  deleted**. Cookies deliberately do NOT go through `browsingData.remove`: that call is
+  global without `origins`, and its `origins` filter is exact-origin, so it would miss
+  `.k2.corp.com` and every subdomain cookie. Per-cookie removal is the only way to hit
+  exactly the set `hostInScope` defines. Never add `cache: true` — that type ignores
+  `origins` entirely and would clear every site. `test/wiring.test.mjs` fails the build on
+  any `browsingData.remove` lacking an `origins` filter, on `cache: true`, and on any
+  reappearance of a cookie snapshot.
 
-#### `restoreSnapshot()`
-- **Defined**: `background.js:257`
-- **Impact**: high
-- **Called by**: `clearAuthCache` (306), worker boot (393)
-- **Side effects**: writes cookies; clears or decrements the stored snapshot
-- **Change note**: idempotent by design — re-setting an existing cookie is a harmless overwrite. Runs on **every** worker spin-up, which is the crash-recovery path. Reads the snapshot from `INSTANCE_AREA`, never `storage.local`: restoring a private window's cookies into the normal profile would be both a bug and a disclosure.
+#### `needsAuthFlush(preemptive)`
+- **Defined**: `background.js:293`
+- **Impact**: high — decides whether siblings get signed out
+- **Called by**: `switchTo` (306)
+- **Side effects**: none (reads `ruleError`)
+- **Change note**: `cookies: true` is the only lever that drops Chrome's HTTP auth cache
+  (`DATA_TYPE_COOKIES` triggers `ClearHttpAuthCache`), and for cookies Chrome widens
+  `origins` to the **registrable domain** — so flushing `k2.corp.com` also signs the user
+  out of `jira.corp.com`. That cost is only worth paying when the DNR header is not doing
+  the job: pre-emptive off, or `ruleError` set. Must be called **after** `syncRules()` so
+  `ruleError` is current. Widening this to always-true is a regression, not a simplification.
 
 #### `switchTo(sessionId)`
-- **Defined**: `background.js:326`
+- **Defined**: `background.js:299`
 - **Impact**: high — the extension's main action
 - **Called by**: message handler (356) ← `popup.js:151`
-- **Calls**: `getConfig` (327), `writeActiveByDomain` (333), `syncRules` (334), `clearSiteState` (335), `clearAuthCache` (337), `reloadTabsIn` (338)
+- **Calls**: `getConfig` (300), `writeActiveByDomain` (304), `syncRules` (305), `needsAuthFlush` (306), `clearSiteData` (306), `reloadTabsIn` (307)
 - **Side effects**: writes `activeByDomain` **to this instance only**; clears cookies; reloads tabs
 - **Change note**: scoped twice over — to `session.domain`, and to the calling profile instance. Widening either breaks a guarantee: the first that switching on UAT leaves DEV signed in, the second that switching in a private window leaves the normal window alone.
 

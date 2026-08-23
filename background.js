@@ -9,7 +9,6 @@
 
 import {
   STORAGE_DEFAULTS,
-  SNAPSHOT_KEY,
   IS_INCOGNITO,
   INSTANCE_AREA,
   readActiveByDomain,
@@ -227,92 +226,59 @@ function cookieUrl(c) {
   return `${c.secure ? "https" : "http"}://${c.domain.replace(/^\./, "")}${c.path}`;
 }
 
-// chrome.cookies.set is not a straight round-trip of chrome.cookies.get — hostOnly is
-// expressed by *omitting* domain, and a few attribute combinations are rejected.
-function toSetDetails(c) {
-  const details = {
-    url: cookieUrl(c),
-    name: c.name,
-    value: c.value,
-    path: c.path,
-    secure: c.secure,
-    httpOnly: c.httpOnly,
-    storeId: c.storeId
-  };
-  if (!c.hostOnly) details.domain = c.domain;
-  if (c.expirationDate) details.expirationDate = c.expirationDate;
-  if (c.partitionKey) details.partitionKey = c.partitionKey;
-  // SameSite=None is only valid on a Secure cookie.
-  if (c.sameSite && c.sameSite !== "unspecified") {
-    details.sameSite = c.sameSite === "no_restriction" && !c.secure ? "lax" : c.sameSite;
-  }
-  return details;
-}
-
-const MAX_RESTORE_ATTEMPTS = 3;
-
-// Writes back whatever is left in the persisted snapshot. Idempotent: re-setting a cookie
-// that already exists is a harmless overwrite, so running this twice costs nothing.
-// Only cookies that still failed are kept, so retries shrink monotonically.
-async function restoreSnapshot() {
-  const { [SNAPSHOT_KEY]: snap } = await INSTANCE_AREA.get(SNAPSHOT_KEY);
-  if (!snap?.cookies?.length) {
-    if (snap) await INSTANCE_AREA.remove(SNAPSHOT_KEY);
-    return { restored: 0, lost: 0 };
-  }
-
-  const attempts = (snap.attempts ?? 0) + 1;
-  const results = await Promise.allSettled(snap.cookies.map((d) => chrome.cookies.set(d)));
-  const failed = snap.cookies.filter(
-    (_, i) => results[i].status === "rejected" || !results[i].value
-  );
-
-  if (failed.length && attempts < MAX_RESTORE_ATTEMPTS) {
-    await INSTANCE_AREA.set({ [SNAPSHOT_KEY]: { cookies: failed, attempts } });
-  } else {
-    // Give up rather than retry a permanently invalid cookie on every startup forever.
-    await INSTANCE_AREA.remove(SNAPSHOT_KEY);
-  }
-  return { restored: snap.cookies.length - failed.length, lost: failed.length };
-}
-
-// Chrome exposes no origin-scoped way to drop the HTTP auth cache — clearing cookies
-// globally is the only lever. So we snapshot every out-of-scope cookie first and write
-// it back afterwards, which keeps the user logged into every other site.
-async function clearAuthCache(domains) {
-  let preserved = [];
-  try {
-    const all = await chrome.cookies.getAll({});
-    preserved = all.filter((c) => !hostInScope(c.domain, domains)).map(toSetDetails);
-  } catch (e) {
-    console.warn("cookie snapshot failed, skipping clear to avoid data loss", e);
-    return;
-  }
-
-  // Persist before the destructive step. If the worker is terminated between the clear
-  // and the restore, the next spin-up picks the snapshot back up instead of losing every
-  // login. If this write fails we must NOT clear — there would be no way back.
-  try {
-    await INSTANCE_AREA.set({ [SNAPSHOT_KEY]: { cookies: preserved, attempts: 0 } });
-  } catch (e) {
-    await INSTANCE_AREA.set({
-      lastReset: { at: Date.now(), restored: 0, lost: 0, aborted: String(e.message ?? e) }
-    });
-    return;
-  }
-
-  await chrome.browsingData.remove({}, { cookies: true });
-
-  const { restored, lost } = await restoreSnapshot();
-  await INSTANCE_AREA.set({ lastReset: { at: Date.now(), restored, lost } });
-}
-
-async function clearSiteState(domains) {
+// Everything the selected domain owns, and nothing else.
+//
+// This deliberately does NOT use browsingData.remove for cookies. That call is global
+// whenever `origins` is omitted, and its origins filter matches an exact origin rather
+// than the domain tree — it would miss `.k2.corp.com` and every subdomain cookie. Reading
+// and removing per cookie is the only way to hit exactly the same set `hostInScope`
+// defines, which is what lets us promise no other site is ever touched.
+async function clearSiteData(domains, { flushAuthCache = false } = {}) {
   if (!domains.length) return;
-  await chrome.browsingData.remove(
-    { origins: originsFor(domains) },
-    { localStorage: true, cacheStorage: true, indexedDB: true, serviceWorkers: true }
+
+  // Scoped read: `domain` matches that domain and its subdomains, so no cookie belonging
+  // to an unrelated site is ever even read, let alone written to extension storage.
+  const found = await Promise.all(
+    domains.map((d) => chrome.cookies.getAll({ domain: d }).catch(() => []))
   );
+  const mine = found.flat().filter((c) => hostInScope(c.domain, domains));
+
+  const results = await Promise.allSettled(
+    mine.map((c) => {
+      const details = { url: cookieUrl(c), name: c.name, storeId: c.storeId };
+      // A partitioned cookie is only removable by naming its partition.
+      if (c.partitionKey) details.partitionKey = c.partitionKey;
+      return chrome.cookies.remove(details);
+    })
+  );
+  const removed = results.filter((r) => r.status === "fulfilled" && r.value).length;
+
+  // Every type here honours `origins` (Chrome documents the filter as supported for
+  // "cookies, storage and cache"), so this call only ever reaches the target domain.
+  // Anything added later must be checked against that list — a type that ignores `origins`
+  // would silently turn this into a profile-wide wipe.
+  const types = {
+    cache: true, localStorage: true, cacheStorage: true, indexedDB: true, serviceWorkers: true
+  };
+
+  // `cookies: true` is the only lever in the whole extension API that drops Chrome's
+  // in-memory HTTP auth cache: DATA_TYPE_COOKIES is what triggers ClearHttpAuthCache, and
+  // with an origins filter that clear is scoped rather than global.
+  //
+  // The cost: for cookies (and therefore for the auth cache) Chrome widens `origins` to the
+  // *registrable domain*, deliberately, matching Clear-Site-Data. Flushing k2.corp.com also
+  // signs the user out of jira.corp.com. So we only pay it when it is the only thing that
+  // can make the switch take effect — see needsAuthFlush().
+  if (flushAuthCache) types.cookies = true;
+
+  await chrome.browsingData.remove({ origins: originsFor(domains) }, types);
+
+  await INSTANCE_AREA.set({
+    lastReset: {
+      at: Date.now(), domains: [...domains], removed,
+      failed: mine.length - removed, authFlush: flushAuthCache
+    }
+  });
 }
 
 async function reloadTabsIn(domains) {
@@ -323,8 +289,19 @@ async function reloadTabsIn(domains) {
 
 // Switching always drops the auth cache — that is the whole point of the extension, and
 // with cookie preservation it is cheap enough to do unconditionally.
+// A pre-emptive Authorization header beats the auth cache outright: Chrome adds the cached
+// credentials first, then merges the request's own headers over the top, and a same-named
+// header overwrites. So when the DNR rule is actually live there is nothing to flush. When
+// it is not — pre-emptive off, or Chrome rejected the rule — the cache is the only thing
+// answering, and without a flush the switch silently keeps serving the previous user.
+async function needsAuthFlush(preemptive) {
+  if (!preemptive) return true;
+  const { ruleError } = await INSTANCE_AREA.get({ ruleError: null });
+  return !!ruleError;
+}
+
 async function switchTo(sessionId) {
-  const { sessions, activeByDomain } = await getConfig();
+  const { sessions, activeByDomain, preemptive } = await getConfig();
   const session = sessions.find((s) => s.id === sessionId);
   if (!session?.domain) return;
 
@@ -332,8 +309,7 @@ async function switchTo(sessionId) {
   const scope = [session.domain];
   await writeActiveByDomain({ ...activeByDomain, [session.domain]: sessionId });
   await syncRules();
-  await clearSiteState(scope);
-  await clearAuthCache(scope);
+  await clearSiteData(scope, { flushAuthCache: await needsAuthFlush(preemptive) });
   await reloadTabsIn(scope);
 }
 
@@ -386,9 +362,6 @@ if (IS_INCOGNITO) {
 chrome.runtime.onInstalled.addListener(syncRules);
 chrome.runtime.onStartup.addListener(syncRules);
 
-// Runs on every worker spin-up, not just browser start: if a previous clear was cut short
-// by the worker being terminated, restoreSnapshot is what puts the cookies back.
 migrate()
   .then(syncRules)
-  .then(restoreSnapshot)
-  .catch((e) => console.warn("startup recovery failed", e));
+  .catch((e) => console.warn("startup sync failed", e));

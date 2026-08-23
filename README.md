@@ -25,8 +25,9 @@ exactly the behaviour you were fighting.
 **Default path — challenge-response.** `webRequest.onAuthRequired` answers the credential
 prompt with the active session's credentials. Works for Basic, Digest and NTLM.
 
-Because Chrome caches the result, switching sessions clears the HTTP auth cache, clears
-web storage for your domains, and reloads matching tabs.
+Because Chrome caches the result, switching sessions clears that domain's cookies and web
+storage, reloads matching tabs, and flushes the HTTP auth cache when nothing else can make
+the switch take effect.
 
 **Optional — pre-emptive** (`Send credentials pre-emptively`, off by default). A
 `declarativeNetRequest` rule attaches `Authorization: Basic …` to every request for your
@@ -46,26 +47,45 @@ loopback, `10.x`, `192.168.x`, `172.16–31.x`, single-label names like `k2serve
 `.local` / `.internal` / `.intranet`. Digest, NTLM and Negotiate are never restricted —
 none of them put the password on the wire.
 
-### Why clearing the auth cache doesn't log you out of everything
+### What a switch actually deletes
 
-Chrome exposes no origin-scoped way to drop the HTTP auth cache — the only lever is a
-global cookie clear. So before clearing, the extension snapshots every cookie **outside**
-your configured domains and writes it back immediately afterwards. You stay logged into
-Gmail, Jira, and everything else.
+A switch touches **only the domain you are switching on**. Nothing is snapshotted, nothing
+is restored, and no other site's cookies are read at all.
 
-A small number can fail to restore (unusual attribute combinations); those sites need a
-re-login. The count is recorded under `lastReset` for diagnostics — read it from the
-extension's storage if you need it; it is not surfaced in the UI.
+1. Cookies for that domain and its subdomains are removed one by one via
+   `chrome.cookies.remove`. The read is scoped with `cookies.getAll({ domain })`, so
+   cookies belonging to sites you did not configure are never even loaded.
+2. The HTTP cache, `localStorage`, IndexedDB, CacheStorage and service workers are
+   cleared for that domain's origins only.
+3. Chrome's HTTP auth cache is flushed **only when it is the thing standing in your way**
+   — see below.
 
-While a switch is in flight, that snapshot — every cookie you hold for every other site —
-is written to extension storage so it can survive the service worker being killed. In a
-normal window that storage is on disk and unencrypted, which is strictly weaker than
-Chrome's own cookie store. It is deleted as soon as the cookies are restored.
+Earlier versions cleared every cookie in the profile and wrote the out-of-scope ones back
+afterwards. That is gone. It was also the cause of a real bug: a site that rotates its
+session cookie could have the restored value already invalidated server-side, so you were
+signed out even though the restore "succeeded".
 
-The snapshot is written **before** the clear, so if Chrome terminates the service worker
-mid-operation the cookies are restored on the next spin-up rather than lost. If the
-snapshot cannot be written at all, the clear is abandoned instead of leaving you with no
-way back.
+### The auth-cache flush, and what it costs
+
+`browsingData.remove` with `cookies: true` is the only call in the extension API that drops
+Chrome's in-memory HTTP auth cache — `DATA_TYPE_COOKIES` is what triggers
+`ClearHttpAuthCache` internally. With an `origins` filter that flush is **scoped**, not
+global.
+
+It is not free, though. For cookies Chrome widens `origins` to the **registrable domain**
+(eTLD+1), deliberately, matching `Clear-Site-Data` semantics. Flushing `k2.corp.com`
+therefore also signs you out of `jira.corp.com`. Unrelated sites are untouched, but
+siblings under the same registrable domain are not.
+
+So the flush is conditional. In pre-emptive mode the DNR rule attaches an explicit
+`Authorization` header, and Chrome adds cached credentials first and then merges the
+request's own headers over the top — a same-named header overwrites, so the explicit header
+wins and the cache is irrelevant. When pre-emptive is on and its rule installed cleanly, no
+flush is issued. When pre-emptive is off, or Chrome rejected the rule, the cache is the only
+thing answering and the flush is the only way to make the switch take effect.
+
+`lastReset` records what happened (`removed`, `failed`, `authFlush`) for diagnostics. It is
+not surfaced in the UI.
 
 ## Private windows are a separate session
 
@@ -80,8 +100,8 @@ at.
 
 Your **users and domains are shared** with private windows — you do not have to re-add
 them. Only the active selection is separate. Nothing a private window *does* is written to
-disk: its active user, its cookie snapshot and its diagnostics all live in session memory
-and vanish when the last private window closes.
+disk: its active user and its diagnostics live in session memory and vanish when the last
+private window closes.
 
 A private window opens on whatever user your normal window is currently signed in as, then
 diverges from there once you switch.
@@ -115,11 +135,12 @@ the only way to survive moving this folder.
 npm test
 ```
 
-23 checks. A static wiring pass (manifest, DOM ids, CSS classes, message contracts,
+25 checks. A static wiring pass (manifest, DOM ids, CSS classes, message contracts, 14
 regression guards) plus two suites: the backup crypto/merge path, and `background.js`
-executed in a VM with stubbed Chrome APIs — covering the destructive cookie path (crash
-recovery, the retry cap, the abort-on-unwritable-snapshot guard, hostOnly/SameSite
-round-tripping) and the refusal to send Basic credentials over plain http.
+executed in a VM with stubbed Chrome APIs — covering the scoped clear (only the target
+domain is touched, other sites' cookies are never read, subdomains are included, the
+auth-cache flush stays conditional) and the refusal to send Basic credentials over plain
+http.
 
 ## Install
 
@@ -176,7 +197,7 @@ path.
 | File | Role |
 |---|---|
 | `manifest.json` | MV3 manifest, permissions |
-| `background.js` | `onAuthRequired` handler, DNR rule sync, switching, auth cache clear |
+| `background.js` | `onAuthRequired` handler, DNR rule sync, switching, scoped site-data clear |
 | `storage.js` | Canonical storage shape, profile isolation (`INSTANCE_AREA`) |
 | `backup.js` | Export/import crypto, merge, domain normalization |
 | `popup.html/.css/.js` | Session list and settings UI |

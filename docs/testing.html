@@ -132,12 +132,12 @@
   </ol>
   <div class="why">
     <strong>Why this matters for the <code>&lt;all_urls&gt;</code> permission:</strong>
-    switching clears Chrome's HTTP auth cache, and the only API that does so
-    (<code>browsingData.remove</code>) clears every cookie in the profile, globally,
-    regardless of host permissions. The extension snapshots every cookie outside the
-    configured domains and writes it back immediately afterwards. This step demonstrates
-    that the broad host permission exists to <em>restore</em> the user's sessions, not to
-    access those sites.
+    switching deletes data only for the selected domain. Cookies are read with a
+    domain-scoped <code>cookies.getAll({domain})</code> and removed one at a time, and
+    every <code>browsingData.remove</code> call carries an <code>origins</code> filter.
+    No other site's cookies are read or deleted at any point. The broad host permission
+    is required by the <code>onAuthRequired</code> listener, which must be registered
+    before any domain is configured — not by the cookie code.
   </div>
 
   <h2>Optional — Digest authentication</h2>
