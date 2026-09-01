@@ -14,6 +14,7 @@ import {
   readActiveByDomain,
   writeActiveByDomain
 } from "./storage.js";
+import { domainsOf } from "./backup.js";
 
 const ALL_RESOURCE_TYPES = [
   "main_frame", "sub_frame", "stylesheet", "script", "image", "font",
@@ -22,19 +23,32 @@ const ALL_RESOURCE_TYPES = [
 
 // preemptive defaults off: it only suits Basic auth, and sending an unsolicited
 // Authorization header breaks NTLM/Negotiate sites outright.
-// v1 stored a flat session list with one global activeSessionId.
+//
+// Two shape changes have happened to a stored user:
+//   v1 → v2: one flat list with a single global activeSessionId, no per-user domain.
+//   v2 → v3: the `domain` string became a `domains` list, so one set of credentials can
+//            serve sibling sites (k2.corp.com and k2test.corp.com are the same account).
+// Both run here, and this must stay idempotent — it runs on every worker spin-up.
 async function migrate() {
   if (IS_INCOGNITO) return;
   const stored = await chrome.storage.local.get(["sessions", "domains", "activeSessionId"]);
   const sessions = stored.sessions ?? [];
-  if (stored.activeSessionId === undefined && sessions.every((s) => s.domain)) return;
+
+  const needsV2 = stored.activeSessionId !== undefined;
+  const needsV3 = sessions.some((s) => !Array.isArray(s.domains));
+  if (!needsV2 && !needsV3) return;
 
   const home = stored.domains?.[0] ?? null;
   const activeByDomain = (await chrome.storage.local.get({ activeByDomain: {} })).activeByDomain;
   if (stored.activeSessionId && home) activeByDomain[home] ??= stored.activeSessionId;
 
   await chrome.storage.local.set({
-    sessions: sessions.map((s) => ({ ...s, domain: s.domain ?? home })),
+    // `domain` is dropped rather than kept in sync: two fields meaning the same thing is
+    // how they drift. domainsOf() is what reads a record that has not been through here yet.
+    sessions: sessions.map(({ domain, ...rest }) => {
+      const owned = domainsOf({ ...rest, domain: domain ?? home });
+      return { ...rest, domains: owned };
+    }),
     activeByDomain
   });
   await chrome.storage.local.remove("activeSessionId");
@@ -103,12 +117,24 @@ async function syncRules() {
 
     for (const [tabId, sessionId] of Object.entries(tabAssignments)) {
       const session = byId.get(sessionId);
-      if (!session?.domain) continue;
+      const owned = domainsOf(session);
+      if (!owned.length) continue;
       assignedTabIds.push(Number(tabId));
-      addRules.push(authRule(id++, 2, session, [session.domain], { tabIds: [Number(tabId)] }));
+      // A pinned tab carries this user across every site they are configured for, so
+      // following a link from k2 to k2test stays the same identity.
+      //
+      // One rule per domain rather than one rule listing them all: authRule's https-only
+      // anchor applies to the whole rule, so a user spanning an http-only intranet host and
+      // a public one would otherwise have to either drop the anchor or lock the intranet
+      // host out of pre-emptive mode. Split, each domain gets the anchor it needs.
+      for (const domain of owned) {
+        addRules.push(authRule(id++, 2, session, [domain], { tabIds: [Number(tabId)] }));
+      }
     }
 
-    // One rule per domain, each carrying that domain's own signed-in user.
+    // One rule per domain, each carrying that domain's own signed-in user. Keyed by domain
+    // rather than by user, so a user configured for several domains is only served on the
+    // ones where they are actually the active one.
     for (const domain of domains) {
       const active = byId.get(activeByDomain[domain]);
       if (!active) continue;
@@ -300,14 +326,27 @@ async function needsAuthFlush(preemptive) {
   return !!ruleError;
 }
 
-async function switchTo(sessionId) {
+async function switchTo(sessionId, domain = null) {
   const { sessions, activeByDomain, preemptive } = await getConfig();
   const session = sessions.find((s) => s.id === sessionId);
-  if (!session?.domain) return;
+  if (!session) return;
 
-  // Scoped to this user's own domain, so other environments keep their sessions.
-  const scope = [session.domain];
-  await writeActiveByDomain({ ...activeByDomain, [session.domain]: sessionId });
+  // A user can serve several sites, and each site tracks its own signed-in user. The panel
+  // names the one it is showing; switching every site this user covers would clear cookies
+  // and reload tabs on a site the user was not even looking at.
+  //
+  // A named site is checked against this user's own list rather than trusted, and a site
+  // they do not serve is refused outright rather than quietly redirected to another one —
+  // that only happens when the panel is out of sync with storage, and guessing which site
+  // was meant would clear the wrong one's cookies. No site named at all is the older
+  // message shape, which predates multi-site users and can only have meant their first.
+  const owned = domainsOf(session);
+  const target = domain == null ? owned[0] : domain;
+  if (!target || !owned.includes(target)) return;
+
+  // Scoped to that one domain, so other environments keep their sessions.
+  const scope = [target];
+  await writeActiveByDomain({ ...activeByDomain, [target]: sessionId });
   await syncRules();
   await clearSiteData(scope, { flushAuthCache: await needsAuthFlush(preemptive) });
   await reloadTabsIn(scope);
@@ -329,7 +368,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (sender.id !== chrome.runtime.id) return false;
 
   const handlers = {
-    switch: () => switchTo(msg.sessionId),
+    switch: () => switchTo(msg.sessionId, msg.domain),
     openAs: () => openAs(msg.sessionId, msg.url),
     sync: () => syncRules()
   };

@@ -381,3 +381,164 @@ p.hint { margin: 5px 0 0; }
   padding-top: 7px;
   margin-top: 10px;
 }
+
+/* ---- Multi-site picker (add/edit user) ---------------------------------- */
+
+/* A collapsed summary that opens to a checkbox list. Deliberately not a native
+   <select multiple>: ctrl+click is unguessable, and Chrome paints it with OS colours
+   that fight the panel. Built from the same surface/border tokens as .box inputs so it
+   reads as one more field in the form. */
+
+.choice { margin-bottom: 6px; }
+.choice .label { margin-bottom: 4px; }
+
+.choice-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 8px;
+  text-align: left;
+  cursor: pointer;
+}
+.choice-toggle:hover { border-color: var(--muted); }
+.choice-toggle:focus-visible { outline: none; border-color: var(--accent); }
+
+.choice-summary {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Nothing ticked is a blocked save, so it reads as a prompt rather than a value. */
+.choice-summary:empty::before { content: "Pick at least one site"; color: var(--muted); }
+
+.choice-caret { flex: none; font-size: 9px; color: var(--muted); transition: transform .15s ease; }
+.choice-toggle[aria-expanded="true"] .choice-caret { transform: rotate(180deg); }
+
+@media (prefers-reduced-motion: reduce) {
+  .choice-caret { transition: none; }
+}
+
+.choice-list {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 3px;
+  max-height: 132px;
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+
+.choice-row {
+  display: flex !important;
+  align-items: center;
+  gap: 7px;
+  /* Beats `.box label { font-size: 11px; color: var(--muted) }` — these are values, not captions. */
+  color: var(--text) !important;
+  font-size: 12px !important;
+  margin-bottom: 0 !important;
+  padding: 5px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.choice-row:hover { background: var(--surface-hi); }
+
+/* The native checkbox stays for semantics and keyboard use; .choice-box is what's painted,
+   the same trick .check/.toggle already uses for the pre-emptive switch. */
+.choice-item input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.choice-box {
+  position: relative;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  transition: background .15s ease, border-color .15s ease;
+}
+.choice-box::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: 4px;
+  width: 3px;
+  height: 7px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) scale(0);
+  transition: transform .15s ease;
+}
+.choice-row:hover .choice-box { border-color: var(--muted); }
+.choice-item input:checked + .choice-box { background: var(--accent); border-color: var(--accent); }
+.choice-item input:checked + .choice-box::after { transform: rotate(45deg) scale(1); }
+.choice-item input:focus-visible + .choice-box { outline: 1px solid var(--accent); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .choice-box, .choice-box::after { transition: none; }
+}
+
+.choice-name {
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- Shared-user badge -------------------------------------------------- */
+
+/* Marks a user who signs in to more than one site, so it is obvious that editing or
+   deleting them reaches beyond the site currently on screen. */
+.badge {
+  flex: none;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 9.5px;
+  line-height: 1;
+  padding: 2px 5px;
+  white-space: nowrap;
+}
+.active-head .badge { margin-right: auto; margin-left: 6px; }
+.row-name .badge { display: inline-block; margin-left: 5px; vertical-align: 1px; }
+
+/* ---- Password reveal ---------------------------------------------------- */
+
+/* The wrapper carries the field's bottom margin so the button can stretch the full height
+   of the input alone — anchoring to the wrapper otherwise leaves the eye sitting 6px low. */
+.pw { position: relative; margin-bottom: 6px; }
+
+/* Ties with `.box input[type="text"]` and `.box .sub-form input` on specificity, so these
+   only win by being later in the file. Keep this block at the bottom. The type flips to
+   text when revealed, which is exactly when the [type="text"] rule starts applying. */
+.box .pw input { margin-bottom: 0; padding-right: 32px; }
+
+.pw-toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+}
+.pw-toggle svg { display: block; }

@@ -4,11 +4,12 @@ import vm from "node:vm";
 import fs from "node:fs";
 import assert from "node:assert/strict";
 
-// background.js is an ES module, but vm.Script runs classic scripts. Inline the shared
-// module and drop the import so the real source still executes verbatim.
-const SHARED = fs
-  .readFileSync(new URL("../storage.js", import.meta.url), "utf8")
-  .replace(/^export /gm, "");
+// background.js is an ES module, but vm.Script runs classic scripts. Inline every module it
+// imports and drop the import lines, so the real source still executes verbatim. Anything
+// background.js starts importing has to be added here or it is simply undefined at runtime.
+const SHARED = ["../storage.js", "../backup.js"]
+  .map((f) => fs.readFileSync(new URL(f, import.meta.url), "utf8").replace(/^export /gm, ""))
+  .join("\n");
 const SRC =
   SHARED +
   "\n" +
@@ -106,6 +107,27 @@ const seed = () => [
   { domain: ".gmail.com", hostOnly: false, name: "SID", value: "b", path: "/", secure: true, httpOnly: true, sameSite: "no_restriction", storeId: "0" },
   { domain: "jira.corp.com", hostOnly: true, name: "JSESSIONID", value: "c", path: "/", secure: false, httpOnly: false, sameSite: "unspecified", storeId: "0" }
 ];
+
+// Two sibling sites sharing one set of credentials — the case the multi-domain work exists
+// for — plus a third site that user has nothing to do with.
+const multiSite = () => {
+  const cookie = (domain, name) => ({
+    domain, hostOnly: true, name, value: "1", path: "/",
+    secure: true, httpOnly: true, sameSite: "lax", storeId: "0"
+  });
+  return makeChrome({
+    cookies: [cookie("k2.corp.com", "LIVE"), cookie("k2test.corp.com", "TEST"),
+              cookie("jira.corp.com", "OTHER")],
+    localStore: {
+      domains: ["k2.corp.com", "k2test.corp.com", "jira.corp.com"],
+      sessions: [
+        { id: "shared", domains: ["k2.corp.com", "k2test.corp.com"], name: "QA", username: "qa", password: "p" },
+        { id: "solo", domains: ["k2.corp.com"], name: "Admin", username: "adm", password: "p" }
+      ],
+      activeByDomain: { "k2.corp.com": "solo" }
+    }
+  });
+};
 
 const tests = {
   async "the selected domain's http cache is cleared, scoped to its origins"() {
@@ -212,20 +234,42 @@ const tests = {
     });
     await boot(env);
 
-    assert.equal(env.localStore.sessions[0].domain, "k2.corp.com");
+    assert.deepEqual(env.localStore.sessions[0].domains, ["k2.corp.com"]);
     assert.deepEqual(env.localStore.activeByDomain, { "k2.corp.com": "s1" });
     assert.ok(!("activeSessionId" in env.localStore), "the old key is removed");
+  },
+
+  async "v2 single-domain users migrate to a domain list"() {
+    const env = makeChrome({
+      localStore: {
+        domains: ["k2.corp.com", "k2test.corp.com"],
+        sessions: [{ id: "s1", domain: "k2test.corp.com", name: "A", username: "u", password: "p" }],
+        activeByDomain: { "k2test.corp.com": "s1" }
+      }
+    });
+    await boot(env);
+
+    const [user] = env.localStore.sessions;
+    assert.deepEqual(user.domains, ["k2test.corp.com"], "the one domain becomes a one-item list");
+    assert.ok(!("domain" in user), "the superseded field is dropped, not left to drift");
+    assert.deepEqual(env.localStore.activeByDomain, { "k2test.corp.com": "s1" },
+      "who is signed in where is untouched");
   },
 
   async "migration leaves already-migrated data alone"() {
     const env = makeChrome({
       localStore: {
-        domains: ["k2.corp.com"],
-        sessions: [{ id: "s1", domain: "k2.corp.com", name: "A", username: "u", password: "p" }],
+        domains: ["k2.corp.com", "k2test.corp.com"],
+        sessions: [{
+          id: "s1", domains: ["k2.corp.com", "k2test.corp.com"],
+          name: "A", username: "u", password: "p"
+        }],
         activeByDomain: { "k2.corp.com": "s1" }
       }
     });
     await boot(env);
+    // Runs on every worker spin-up, so a second pass must not disturb a v3 record.
+    assert.deepEqual(env.localStore.sessions[0].domains, ["k2.corp.com", "k2test.corp.com"]);
     assert.deepEqual(env.localStore.activeByDomain, { "k2.corp.com": "s1" });
   },
 
@@ -250,6 +294,73 @@ const tests = {
     assert.deepEqual(env.localStore.activeByDomain, { "k2uat.corp.com": "u1" });
     assert.deepEqual(env.cookies.map((c) => c.name), ["DEV"],
       "the other environment must keep its session");
+  },
+
+  // The whole point of multi-domain users: one credential set, several sibling sites, but
+  // switching still only ever disturbs the site the panel was showing.
+  async "switching a multi-site user only touches the site the panel named"() {
+    const env = multiSite();
+    await (await boot(env)).switchTo("shared", "k2test.corp.com");
+
+    assert.deepEqual(env.localStore.activeByDomain,
+      { "k2.corp.com": "solo", "k2test.corp.com": "shared" },
+      "only the named site changes hands");
+    assert.deepEqual(env.cookies.map((c) => c.name).sort(), ["LIVE", "OTHER"],
+      "the site nobody was looking at keeps its session");
+  },
+
+  async "a site the user does not serve cannot widen the switch"() {
+    const env = multiSite();
+    // A stale panel, or anything else that got a message onto the channel, naming a site
+    // this user has nothing to do with. It must not become the scope of a cookie wipe.
+    await (await boot(env)).switchTo("shared", "jira.corp.com");
+
+    assert.deepEqual(env.localStore.activeByDomain, { "k2.corp.com": "solo" },
+      "an unserved site is never signed in to, and no other site is switched instead");
+    assert.deepEqual(env.cookies.map((c) => c.name).sort(), ["LIVE", "OTHER", "TEST"],
+      "the request is refused outright, so nothing is cleared anywhere");
+  },
+
+  async "a switch with no site named falls back to the user's first"() {
+    const env = multiSite();
+    await (await boot(env)).switchTo("shared");
+
+    assert.equal(env.localStore.activeByDomain["k2.corp.com"], "shared");
+    assert.deepEqual(env.cookies.map((c) => c.name).sort(), ["OTHER", "TEST"],
+      "only the fallback site is cleared");
+  },
+
+  async "a multi-site user is only served where they are the active one"() {
+    const env = multiSite();
+    env.localStore.preemptive = true;
+    const ctx = await boot(env);
+    await ctx.switchTo("shared", "k2test.corp.com");
+
+    const { addRules } = env.calls.rules.at(-1);
+    const served = addRules.map((r) => [r.condition.requestDomains[0], r.action.requestHeaders[0].value]);
+    const forTest = served.filter(([d]) => d === "k2test.corp.com");
+    const forLive = served.filter(([d]) => d === "k2.corp.com");
+
+    assert.equal(forTest.length, 1, "the site just switched gets exactly one rule");
+    assert.notEqual(forTest[0][1], forLive[0]?.[1],
+      "the other site keeps its own signed-in user's header, not this one's");
+  },
+
+  async "a pinned tab carries its user across every site that user serves"() {
+    const env = multiSite();
+    env.localStore.preemptive = true;
+    env.sessionStore.tabAssignments = { 7: "shared" };
+    await boot(env);
+
+    const { addRules } = env.calls.rules.at(-1);
+    const pinned = addRules.filter((r) => r.condition.tabIds?.includes(7));
+    assert.deepEqual([...pinned.map((r) => r.condition.requestDomains[0])].sort(),
+      ["k2.corp.com", "k2test.corp.com"],
+      "both of the user's sites are covered in that tab");
+    // One rule per domain, because the https-only anchor applies to a whole rule and an
+    // intranet site in the same list would otherwise lose pre-emptive mode.
+    assert.ok(pinned.every((r) => r.condition.requestDomains.length === 1),
+      "each site gets its own rule so it can carry its own scheme anchor");
   },
 
   async "challenged hosts are recorded most-recent-first, deduped and capped"() {

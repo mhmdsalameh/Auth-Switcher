@@ -37,6 +37,9 @@ one click.
 • Works with Basic, Digest, NTLM and Negotiate
 • Multiple sites, each with its own set of users and its own signed-in user — switching
   on UAT leaves DEV alone
+• One login can cover several sites at once — k2.corp.com and k2test.corp.com are
+  usually the same account, so it is entered once instead of copied between them
+• The side panel follows the active tab, so moving to a UAT tab brings up UAT's users
 • Private windows run their own independent session, so you can hold two users at once
 • Switching touches only the site you switch on — cookies belonging to sites you did
   not configure are never even read. Other subdomains of that same site can be signed
@@ -152,8 +155,11 @@ Stores the user's list of logins and domains.
 **`tabs`**
 ```
 After a switch, reloads only the tabs on the affected domain so they re-authenticate as
-the new user. Also reads the active tab's URL for the "use this site" shortcut when adding
-a domain. Tab contents are never read or injected into.
+the new user. Reads the active tab's URL for two things: the "use this site" shortcut when
+adding a domain, and to show that site's logins automatically when the user changes tabs.
+Only the URL's hostname is used, and it is compared against the user's own configured list
+in the extension's own page — it is never stored or transmitted. Tab contents are never
+read or injected into.
 ```
 
 **Host permission `<all_urls>`**
@@ -325,9 +331,10 @@ remote script, no WASM fetched at runtime.
 - [x] ~~Regenerate the icon.~~ Done — key with a circulating swap arrow, no lettering,
       no trademark. Source art kept at `icons/source.jpg`; rebuild with
       `python tools/make-icons.py icons/source.jpg`.
-- [x] ~~Screenshots.~~ Done — five at 1280×800 in `store/screenshots/`, upload in filename
-      order. Raw popup captures are in `store/raw/`; re-compose with
-      `python tools/make-screenshots.py` after any UI change.
+- [ ] **Screenshots are stale as of 1.3.0.** The five in `store/screenshots/` predate the
+      multi-site picker, the password reveal and tab-following, so they no longer show the
+      panel a reviewer will see. `tools/make-screenshots.py` only re-composes existing raw
+      captures — new ones have to be taken from a real browser first, into `store/raw/`.
 - [ ] Privacy policy hosted at a public URL and pasted into the dashboard.
 - [ ] Zip the extension without `test/`, `tools/`, `.git`, `*.md`, `package.json`.
 - [ ] Bump `version` in `manifest.json` on every re-upload — the store rejects a repeat.

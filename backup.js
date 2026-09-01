@@ -17,6 +17,19 @@ export function normalizeDomain(line) {
     .toLowerCase();
 }
 
+// A user's credentials usually work on more than one site — k2.corp.com and
+// k2test.corp.com are typically the same account — so `domains` is a list, not a string.
+// v2 wrote a single `domain` instead; migrate() rewrites those on the next worker boot,
+// but the popup can read storage before that happens, and an imported file can carry
+// either shape. Everything reads through here rather than touching either field.
+//
+// Lives in this module because it is the one file with no DOM and no chrome.* — the
+// worker, the popup and the backup code can all import it.
+export function domainsOf(session) {
+  if (Array.isArray(session?.domains)) return session.domains;
+  return session?.domain ? [session.domain] : [];
+}
+
 const b64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
 const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 
@@ -35,10 +48,19 @@ async function deriveKey(passphrase, salt, iterations) {
 
 // Ids are deliberately dropped: they are regenerated on import so a file can be imported
 // into an install that already has users without colliding.
+//
+// `domains` is the canonical field. A single `domain` is written alongside it so a file
+// exported here still opens in a build that predates multi-domain users — that build reads
+// `domain` and lands the user on the first site instead of all of them, which is a
+// degraded import rather than a silently empty one. That backward compatibility is also
+// why the file version stays at 1: the addition is purely additive.
 function toPayload({ domains, sessions }) {
   return {
     domains: [...domains],
-    sessions: sessions.map(({ id, ...rest }) => rest)
+    sessions: sessions.map(({ id, domain, domains: owned, ...rest }) => {
+      const list = domainsOf({ domain, domains: owned });
+      return { ...rest, domains: list, domain: list[0] };
+    })
   };
 }
 
@@ -96,35 +118,51 @@ export async function openBackup(file, passphrase) {
   return JSON.parse(new TextDecoder().decode(plain));
 }
 
-const identity = (s) => `${s.domain}\u0000${s.username}`;
+// A user already here is one with the same username that already covers every site the
+// incoming record names. Same username but a site not covered yet is genuinely new
+// information, so it is added rather than dropped — otherwise re-importing a file after
+// widening a user's sites on another machine would silently discard the widening.
+function covered(existing, incoming) {
+  if (existing.username !== incoming.username) return false;
+  const mine = domainsOf(existing);
+  return incoming.domains.every((d) => mine.includes(d));
+}
 
 // Merges rather than replaces, so importing onto a populated install is non-destructive.
-// A user already present for the same domain and username is skipped.
 export function mergeBackup(current, payload, newId = () => crypto.randomUUID()) {
   const incoming = (payload?.sessions ?? [])
-    .filter((s) => s?.domain && s?.username && s?.name)
-    .map((s) => ({ ...s, domain: normalizeDomain(s.domain) }))
-    .filter((s) => s.domain);
+    .map((s) => {
+      if (!s?.username || !s?.name) return null;
+      // Nothing in the file is trusted: every site name goes through the same sanitizer as
+      // one typed by hand, because this list is what decides where passwords get sent.
+      const domains = [...new Set(domainsOf(s).map(normalizeDomain).filter(Boolean))];
+      if (!domains.length) return null;
+      const { domain, ...rest } = s;
+      return { ...rest, domains };
+    })
+    .filter(Boolean);
 
   const domains = [...new Set([
     ...current.domains,
     ...(payload?.domains ?? []).map(normalizeDomain),
-    ...incoming.map((s) => s.domain)
+    ...incoming.flatMap((s) => s.domains)
   ].filter(Boolean))];
 
-  const seen = new Set(current.sessions.map(identity));
+  // Appended as we go, so two incoming records for the same user still dedupe against
+  // each other and not just against what was already installed.
+  const sessions = [...current.sessions];
   const added = [];
   for (const session of incoming) {
-    if (seen.has(identity(session))) continue;
-    seen.add(identity(session));
-    added.push({ ...session, id: newId() });
+    if (sessions.some((existing) => covered(existing, session))) continue;
+    const record = { ...session, id: newId() };
+    sessions.push(record);
+    added.push(record);
   }
 
-  const sessions = [...current.sessions, ...added];
   const activeByDomain = { ...current.activeByDomain };
   for (const domain of domains) {
     if (activeByDomain[domain]) continue;
-    const first = sessions.find((s) => s.domain === domain);
+    const first = sessions.find((s) => domainsOf(s).includes(domain));
     if (first) activeByDomain[domain] = first.id;
   }
 

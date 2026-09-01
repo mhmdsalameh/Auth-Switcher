@@ -133,6 +133,36 @@ if (!/if \(flushAuthCache\) types\.cookies = true;/.test(bgCode)) {
 }
 if (/cookies:\s*true/.test(bgCode)) fail.push("unconditional cookies:true — flush must go through the flag");
 
+// A user's sites are a list. Reading a `.domain` field off one again would work for a
+// single-site user and silently ignore every extra site on a shared one.
+const jsCode = js.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+if (/\b(session|s|active|user)\.domain\b/.test(bgCode + jsCode)) {
+  fail.push("a user's sites must be read through domainsOf(), not a `.domain` field");
+}
+
+// Switching is scoped to the site the panel is showing. If the message stops carrying it,
+// the worker falls back to the user's first site and clears the wrong one's cookies.
+if (!/type: "switch"[\s\S]{0,120}domain:/.test(js)) {
+  fail.push("the switch message must name the site the panel is showing");
+}
+if (!/switch: \(\) => switchTo\(msg\.sessionId, msg\.domain\)/.test(bgCode)) {
+  fail.push("the worker must pass the panel's site through to switchTo");
+}
+
+// The panel follows the active tab. Without both listeners the selector quietly goes back
+// to needing a manual pick on every switch.
+for (const [event, why] of [["onActivated", "tab activation"], ["onUpdated", "in-tab navigation"]]) {
+  if (!new RegExp(`chrome\\.tabs\\.${event}\\.addListener`).test(js)) {
+    fail.push(`panel no longer follows ${why}`);
+  }
+}
+// Following must never move the site under an open form: the submit handler resolves
+// currentDomain() at save time, so a user would be filed against the wrong site.
+const syncBody = js.slice(js.indexOf("async function syncToTab"), js.indexOf("chrome.tabs.onActivated"));
+if (!/formOpen/.test(syncBody)) {
+  fail.push("tab-following must be suppressed while a form is open");
+}
+
 const clearBody = bgCode.slice(bgCode.indexOf("async function clearSiteData"));
 if (!/cookies\.getAll\(\{ domain: /.test(clearBody)) {
   fail.push("cookie read must be scoped to the target domain, not getAll({})");
@@ -142,4 +172,4 @@ if (fail.length) {
   console.error("  FAIL\n" + fail.map((f) => "        " + f).join("\n"));
   process.exit(1);
 }
-console.log(`  PASS  manifest, ${ids.length} DOM ids, ${usedClasses.size} CSS classes, messages [${sent}], 21 regression guards`);
+console.log(`  PASS  manifest, ${ids.length} DOM ids, ${usedClasses.size} CSS classes, messages [${sent}], 27 regression guards`);

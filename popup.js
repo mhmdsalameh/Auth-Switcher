@@ -1,4 +1,6 @@
-import { buildBackup, parseBackup, openBackup, mergeBackup, normalizeDomain } from "./backup.js";
+import {
+  buildBackup, parseBackup, openBackup, mergeBackup, normalizeDomain, domainsOf
+} from "./backup.js";
 import {
   STORAGE_DEFAULTS,
   INSTANCE_DEFAULTS,
@@ -55,22 +57,64 @@ const SCHEME_NOTES = {
 // the pre-emptive rule overwrites the handshake and login can never complete.
 const UNPREEMPTABLE = new Set(["digest", "ntlm", "negotiate"]);
 
-// The tab the popup is showing. Falls back to the first domain if unset or stale.
+// The managed site the active tab is on. Deliberately panel-local rather than stored:
+// `selectedDomain` lives in storage.local, which is shared with the private-window instance
+// and with every other window's panel, so writing browsing activity there would drag all of
+// them around in lockstep.
+let tabDomain = null;
+// A pick from the dropdown. Outranks the tab, but only until the tab moves to a *different*
+// managed site — staying put while you configure another environment is the point of
+// picking by hand, and having it survive forever would just recreate the original problem.
+let pinnedDomain = null;
+
+// The site the panel is showing, most specific source first. Falls back to the first
+// configured domain when everything else is unset or stale (e.g. after one is deleted).
 function currentDomain() {
-  if (state.selectedDomain && state.domains.includes(state.selectedDomain)) {
-    return state.selectedDomain;
+  for (const candidate of [pinnedDomain, tabDomain, state.selectedDomain]) {
+    if (candidate && state.domains.includes(candidate)) return candidate;
   }
   return state.domains[0] ?? null;
+}
+
+// Maps the active tab onto a configured site, subdomains included — the same rule
+// `domainForHost()` and `hostInScope()` use in the worker, so the panel can't disagree with
+// it about what counts as "this site".
+async function tabSite() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const host = new URL(tab.url).hostname.toLowerCase();
+    return state.domains.find((d) => host === d || host.endsWith("." + d)) ?? null;
+  } catch {
+    // No active tab, or a chrome:// / new-tab URL that won't parse.
+    return null;
+  }
+}
+
+// Returns whether the shown site actually moved, so callers can skip a pointless repaint.
+async function followTab() {
+  const site = await tabSite();
+  // An unmanaged tab leaves the panel exactly where it was. Blanking it every time someone
+  // checks their mail would be worse than not following at all.
+  if (!site) return false;
+
+  const moved = site !== tabDomain;
+  tabDomain = site;
+  if (moved) pinnedDomain = null;
+  return moved;
 }
 
 async function load() {
   state = { ...(await chrome.storage.local.get(STORAGE_DEFAULTS)), ...(await readInstanceState()) };
   state.activeByDomain = await readActiveByDomain();
+  await followTab();
   render();
 }
 
 async function selectDomain(domain) {
   query = ""; // a filter carried across domains would look like missing users
+  pinnedDomain = domain;
+  // Still stored, so a panel opened on an unmanaged tab comes back to the last hand-picked
+  // site rather than to whichever domain happens to sort first.
   await chrome.storage.local.set({ selectedDomain: domain });
   await load();
 }
@@ -92,7 +136,10 @@ function renderDomainPicker() {
     option.selected = domain === selected;
     select.append(option);
   }
-  select.title = selected;
+  // Explains on hover why the selection just moved on its own.
+  select.title = selected === tabDomain && selected !== pinnedDomain
+    ? `${selected} — following the active tab`
+    : selected;
 }
 
 function renderDomains() {
@@ -164,10 +211,24 @@ function buildRow(session) {
   const user = document.createElement("span");
   user.className = "row-user";
   user.textContent = session.username;
+  // A user configured for several sites is worth marking: editing or deleting them from
+  // here reaches beyond the site currently on screen.
+  const sites = domainsOf(session);
+  if (sites.length > 1) {
+    const badge = document.createElement("span");
+    badge.className = "badge";
+    badge.textContent = `${sites.length} sites`;
+    badge.title = `Signs in to ${sites.join(", ")}`;
+    name.append(badge);
+  }
+
   meta.append(name, user);
   main.append(dot, meta);
   main.addEventListener("click", () => {
-    fireAndForget({ type: "switch", sessionId: session.id });
+    // The panel names the site it is showing. A user who serves several must only be
+    // switched on the one in view — the worker would otherwise clear cookies and reload
+    // tabs on a site nobody was looking at.
+    fireAndForget({ type: "switch", sessionId: session.id, domain: currentDomain() });
   });
 
   const actions = document.createElement("span");
@@ -204,12 +265,19 @@ function buildRow(session) {
   delBtn.type = "button";
   delBtn.className = "icon-btn";
   delBtn.textContent = "✕";
-  delBtn.title = `Remove ${session.name}`;
-  delBtn.setAttribute("aria-label", `Remove ${session.name}`);
+  // Say so up front when the row is shared — it is not obvious from a list scoped to one site.
+  delBtn.title = sites.length > 1
+    ? `Remove ${session.name} from all ${sites.length} sites`
+    : `Remove ${session.name}`;
+  delBtn.setAttribute("aria-label", delBtn.title);
   delBtn.addEventListener("click", async () => {
     const sessions = state.sessions.filter((x) => x.id !== session.id);
     const activeByDomain = { ...state.activeByDomain };
-    if (activeByDomain[session.domain] === session.id) delete activeByDomain[session.domain];
+    // This user may be the signed-in one on several sites; none of them may be left
+    // pointing at an id that no longer exists.
+    for (const [d, id] of Object.entries(activeByDomain)) {
+      if (id === session.id) delete activeByDomain[d];
+    }
     await chrome.storage.local.set({ sessions });
     await writeActiveByDomain(activeByDomain);
     await load();
@@ -225,16 +293,32 @@ let settingsOpen = false;
 let formOpen = false;
 // The form doubles as add and edit; editingId null means we are adding.
 let editingId = null;
+// Sites ticked in the open user form, and whether the picker is expanded. Held here rather
+// than read back off the checkboxes because render() rebuilds them.
+let formDomains = new Set();
+let choiceOpen = false;
+
+// The sites the form is offering, in the configured order — never the raw Set, so the list
+// and the summary can't disagree about ordering.
+function chosenDomains() {
+  return state.domains.filter((d) => formDomains.has(d));
+}
 
 function openUserForm(session = null) {
   editingId = session?.id ?? null;
   formOpen = true;
   settingsOpen = false;
+  choiceOpen = false;
+  const domain = currentDomain();
+  // Editing keeps the user's own sites. Adding starts on the site being viewed, which is
+  // the one the person is thinking about — ticking more is the deliberate act.
+  formDomains = new Set(session ? domainsOf(session) : domain ? [domain] : []);
   $("#form-title").textContent = session ? "Edit user" : "Add user";
   $("#form-submit").textContent = session ? "Save changes" : "Save user";
   $("#name").value = session?.name ?? "";
   $("#username").value = session?.username ?? "";
   $("#password").value = session?.password ?? "";
+  hidePasswords();
   render();
   $("#name").focus();
 }
@@ -242,23 +326,137 @@ function openUserForm(session = null) {
 function closeUserForm() {
   editingId = null;
   formOpen = false;
+  choiceOpen = false;
+  formDomains = new Set();
   $("#add-form").reset();
+  hidePasswords();
   render();
+}
+
+// ---- Password reveal -------------------------------------------------------
+
+// Inline SVG rather than an eye emoji: 👁 renders through Segoe UI Emoji on Windows, which
+// paints its own colours and ignores the muted-grey .icon-btn treatment every other control
+// here uses. `currentColor` inherits it instead.
+const EYE =
+  '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" ' +
+  'stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<path d="M1 8 Q4 3.4 8 3.4 T15 8 Q12 12.6 8 12.6 T1 8 Z"/><circle cx="8" cy="8" r="2"/></svg>';
+const EYE_OFF = EYE.replace("</svg>", '<path d="M2.5 13.5 13.5 2.5"/></svg>');
+
+// Builds the button, wires it, and hands back a reset. Passwords here are QA credentials
+// shown over someone's shoulder as often as not, so revealing is never sticky: every reset
+// puts the field back to dots rather than leaving one visible for whoever opens the panel
+// next. form.reset() restores an input's *value*, not its type, so this has to be explicit.
+function addReveal(input) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  // Borrows .icon-btn for the muted/hover/focus treatment; .pw-toggle only positions it.
+  btn.className = "icon-btn pw-toggle";
+
+  const paint = () => {
+    const shown = input.type === "text";
+    btn.innerHTML = shown ? EYE_OFF : EYE;
+    btn.title = shown ? "Hide password" : "Show password";
+    btn.setAttribute("aria-label", btn.title);
+    btn.setAttribute("aria-pressed", String(shown));
+  };
+
+  btn.addEventListener("click", () => {
+    input.type = input.type === "password" ? "text" : "password";
+    paint();
+    input.focus(); // the click stole focus from the field being typed into
+  });
+
+  paint();
+  input.after(btn);
+  return () => {
+    input.type = "password";
+    paint();
+  };
+}
+
+const reveals = [$("#password"), $("#export-pass"), $("#import-pass")].map((el) => addReveal(el));
+const hidePasswords = () => reveals.forEach((reset) => reset());
+
+// Summary and caret only. Split out from the list rebuild below so ticking a box can
+// refresh the summary without destroying the checkbox that currently has focus.
+function renderChoiceSummary() {
+  const picked = chosenDomains();
+  const summary = $("#domain-choice-summary");
+  // Empty is a real state — the CSS prompts for a pick rather than showing a blank field.
+  summary.textContent =
+    picked.length > 1 ? `${picked[0]}  +${picked.length - 1}` : picked[0] ?? "";
+  summary.title = picked.join(", ");
+  $("#domain-choice-toggle").setAttribute("aria-expanded", String(choiceOpen));
+}
+
+function renderDomainChoice() {
+  const block = $("#domain-choice");
+  // One site means nothing to choose, and the form stays exactly as it was before.
+  block.hidden = state.domains.length < 2;
+  if (block.hidden) return;
+
+  renderChoiceSummary();
+
+  const list = $("#domain-choice-list");
+  list.hidden = !choiceOpen;
+  list.textContent = "";
+  if (!choiceOpen) return;
+
+  for (const domain of state.domains) {
+    const li = document.createElement("li");
+    li.className = "choice-item";
+
+    const row = document.createElement("label");
+    row.className = "choice-row";
+
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.checked = formDomains.has(domain);
+    box.addEventListener("change", () => {
+      if (box.checked) formDomains.add(domain);
+      else formDomains.delete(domain);
+      renderChoiceSummary();
+    });
+
+    const mark = document.createElement("span");
+    mark.className = "choice-box";
+
+    const name = document.createElement("span");
+    name.className = "choice-name";
+    name.textContent = domain;
+
+    row.append(box, mark, name);
+    li.append(row);
+    list.append(li);
+  }
 }
 
 function render() {
   const domain = currentDomain();
-  const mine = state.sessions.filter((s) => s.domain === domain);
+  const mine = state.sessions.filter((s) => domainsOf(s).includes(domain));
   const active = mine.find((s) => s.id === state.activeByDomain[domain]) ?? null;
 
   renderDomainPicker();
   renderDomains();
+  renderDomainChoice();
 
   document.documentElement.style.setProperty("--user", userColor(active) ?? "#9d9d9d");
   $("#active-name").textContent = active ? active.name : "Nobody";
   $("#active-user").textContent = active ? active.username : "Pick a user below";
   // The active user is kept out of the list below, so it needs its own edit affordance.
   $("#active-edit").hidden = !active;
+
+  // Editing the signed-in user changes the password everywhere they sign in, so the
+  // shared-site count belongs here too, not only on the rows below.
+  const activeSites = active ? domainsOf(active) : [];
+  const activeBadge = $("#active-badge");
+  activeBadge.hidden = activeSites.length < 2;
+  if (!activeBadge.hidden) {
+    activeBadge.textContent = `${activeSites.length} sites`;
+    activeBadge.title = `Signs in to ${activeSites.join(", ")}`;
+  }
 
   // Settings and the user list are separate pages — never both at once.
   $("#settings").hidden = !settingsOpen;
@@ -367,6 +565,26 @@ async function targetUrl() {
 
 $("#domain-select").addEventListener("change", (e) => selectDomain(e.target.value));
 
+// The panel outlives every tab switch, so it follows the active tab instead of making the
+// site be re-picked by hand each time.
+//
+// Never while a form is open. The add/edit form is bound to the site it was opened on and
+// its submit handler resolves `currentDomain()` at save time, so letting the site move
+// underneath would file the user against whatever tab happened to be in front. The next tab
+// event after the form closes picks the change back up.
+async function syncToTab() {
+  if (formOpen || settingsOpen) return;
+  if (!(await followTab())) return;
+  query = ""; // a filter carried across sites would look like missing users
+  render();
+}
+
+chrome.tabs.onActivated.addListener(syncToTab);
+chrome.tabs.onUpdated.addListener((_tabId, changeInfo) => {
+  // Fires for title, favicon and status too; only a navigation can change the site.
+  if (changeInfo.url) syncToTab();
+});
+
 $("#user-search").addEventListener("input", (e) => {
   query = e.target.value;
   render();
@@ -401,7 +619,10 @@ $("#settings-toggle").addEventListener("click", () => {
     // Don't leave a half-filled user form behind the settings page.
     editingId = null;
     formOpen = false;
+    choiceOpen = false;
+    formDomains = new Set();
     $("#add-form").reset();
+    hidePasswords();
   }
   render();
 });
@@ -452,6 +673,7 @@ function backupStatus(text, isError = false) {
 }
 
 function showBackupForm(which) {
+  hidePasswords();
   $("#export-form").hidden = which !== "export";
   $("#import-form").hidden = which !== "import";
 }
@@ -561,39 +783,77 @@ $("#add-form").addEventListener("submit", async (e) => {
   const domain = currentDomain();
   if (!domain) return;
 
+  // With a single site configured the picker is hidden, so the site on screen is the answer.
+  const chosen = state.domains.length < 2 ? [domain] : chosenDomains();
+  if (!chosen.length) {
+    // A user with nowhere to sign in would save successfully and then appear in no list at
+    // all. Open the picker on the empty field rather than letting that happen quietly.
+    choiceOpen = true;
+    renderDomainChoice();
+    $("#domain-choice-toggle").focus();
+    return;
+  }
+
   // Read before closing — closeUserForm resets the fields.
   const name = $("#name").value.trim();
   const username = $("#username").value;
   const password = $("#password").value;
 
+  const activeByDomain = { ...state.activeByDomain };
+
   if (editingId) {
-    const sessions = state.sessions.map(
-      (s) => (s.id === editingId ? { ...s, name, username, password } : s)
-    );
+    const sessions = state.sessions.map((s) => {
+      if (s.id !== editingId) return s;
+      // Drop any pre-multi-domain `domain` on the way past: two fields meaning the same
+      // thing is how they drift apart.
+      const { domain: _legacy, ...rest } = s;
+      return { ...rest, name, username, password, domains: chosen };
+    });
+
+    // Untick a site this user was signed in on and that site must not be left pointing at
+    // someone who no longer serves it.
+    for (const [d, id] of Object.entries(activeByDomain)) {
+      if (id === editingId && !chosen.includes(d)) delete activeByDomain[d];
+    }
+    // Newly ticked sites with nobody signed in adopt this user, matching what adding does.
+    for (const d of chosen) activeByDomain[d] ??= editingId;
+
     closeUserForm();
     await chrome.storage.local.set({ sessions });
+    await writeActiveByDomain(activeByDomain);
     await load();
     return;
   }
 
-  // Keep colours distinct within a domain; they only need to disambiguate side by side.
-  const used = new Set(state.sessions.filter((s) => s.domain === domain).map((s) => s.color));
+  // Keep colours distinct among the users this one will sit beside; they only need to
+  // disambiguate side by side, so any site in common is enough to count as a clash.
+  const used = new Set(
+    state.sessions
+      .filter((s) => domainsOf(s).some((d) => chosen.includes(d)))
+      .map((s) => s.color)
+  );
   const session = {
     id: crypto.randomUUID(),
-    domain,
+    domains: chosen,
     name,
     username,
     password,
     color: PALETTE.find((c) => !used.has(c)) ?? PALETTE[used.size % PALETTE.length]
   };
 
-  const activeByDomain = { ...state.activeByDomain };
-  activeByDomain[domain] ??= session.id;
+  for (const d of chosen) activeByDomain[d] ??= session.id;
 
   closeUserForm();
   await chrome.storage.local.set({ sessions: [...state.sessions, session] });
   await writeActiveByDomain(activeByDomain);
   await load();
+});
+
+$("#domain-choice-toggle").addEventListener("click", () => {
+  choiceOpen = !choiceOpen;
+  // Not a full render(): that rebuilds the whole panel, and the picker is the only thing
+  // that changed. Keeps the half-typed password fields untouched.
+  renderDomainChoice();
 });
 
 // The side panel stays open across a switch, so it has to follow state the worker changes

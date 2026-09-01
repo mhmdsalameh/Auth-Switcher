@@ -133,8 +133,10 @@ Settings &#9881; → **Backup**.
   passphrase the file is AES-256-GCM encrypted, key derived by PBKDF2-SHA256 (600k
   iterations, random salt) — safe to send over email, Teams or a USB stick. Leave the
   passphrase blank and **the file contains your passwords in plain text**.
-- **Import…** merges rather than replaces. A user already present for the same domain and
-  username is skipped and never overwritten, so re-importing the same file is harmless.
+- **Import…** merges rather than replaces. A user is skipped and never overwritten when one
+  is already here with the same username covering every site the file lists for them, so
+  re-importing the same file is harmless. A file that names a site you don't cover yet is
+  new information, so that user is added rather than dropped.
 
 Ids are regenerated on import, and domains from the file are added to your list. Only
 users and domains travel — not the auth cache or per-tab pins, which are machine-specific.
@@ -148,12 +150,13 @@ the only way to survive moving this folder.
 npm test
 ```
 
-27 checks. A static wiring pass (manifest, DOM ids, CSS classes, message contracts, 21
+40 checks. A static wiring pass (manifest, DOM ids, CSS classes, message contracts, 27
 regression guards) plus two suites: the backup crypto/merge path, and `background.js`
 executed in a VM with stubbed Chrome APIs — covering the scoped clear (only the target
 domain is touched, other sites' cookies are never read, subdomains are included, the
-auth-cache flush stays conditional) and the refusal to send Basic credentials over plain
-http.
+auth-cache flush stays conditional), the refusal to send Basic credentials over plain
+http, and the guarantee that switching a user shared across sites only ever disturbs the
+one the panel is showing.
 
 ## Install
 
@@ -167,11 +170,36 @@ http.
    The host that asked for credentials is offered there — click **Add**. Failing that, use
    **This site** to take the current tab's domain, or type it. Subdomains are included
    automatically.
-2. **Add user** for each test account. Users belong to the domain tab that's selected.
+2. **Add user** for each test account. A new user starts on the domain tab that's selected.
 3. Click any user to switch to them.
 
 Each domain gets its own tab and its own set of users, and tracks its own signed-in user.
 Switching on UAT clears and reloads only UAT — your DEV and PROD sessions are untouched.
+
+### The site picker follows your tabs
+
+The panel moves itself to whichever configured site the active tab is on, so switching from
+a DEV tab to a UAT one brings up UAT's users without touching the dropdown. Three things
+keep that from being annoying:
+
+- A tab on a site you don't manage changes nothing — the panel stays where it was.
+- Picking from the dropdown by hand wins until you move to a *different* managed site, so
+  you can sit on DEV and configure UAT.
+- It never moves while the add/edit form is open, so a user can't be saved against the
+  wrong site.
+
+### One account, several sites
+
+Sibling sites are often the same account — `k2.corp.com` and `k2test.corp.com` usually take
+the same login. Once you have more than one domain configured, the add/edit user form grows
+a **Sites this user can sign in to** picker: tick every site the account works on and the
+user appears under each of them, so there is no copy-pasting a password between tabs. A
+shared user is marked with a `2 sites` badge, and editing or deleting one there changes it
+everywhere.
+
+Switching still only ever touches the site you are looking at. Signing in as that user on
+`k2test` leaves whoever is signed in on `k2` exactly where they were — each site keeps
+tracking its own active user.
 
 ## Which scheme am I on?
 
