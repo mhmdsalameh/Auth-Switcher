@@ -6,3 +6,8 @@ node_modules/
 # Exported backups contain QA passwords in the clear when no passphrase is set.
 # Never commit one.
 *-users-*.json
+
+# Loose copies of the master art dropped in the repo root. The tracked original is
+# icons/source.jpg — these are byte-identical duplicates, and an untracked file makes
+# `npm run package` refuse to build.
+/*.jpg
