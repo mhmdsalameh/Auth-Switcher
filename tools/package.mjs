@@ -15,10 +15,11 @@ const root = path.resolve(import.meta.dirname, "..");
 const run = (cmd, args, opts = {}) =>
   execFileSync(cmd, args, { cwd: root, encoding: "utf8", ...opts }).trim();
 
-// Files the extension never loads at runtime have no business in the package.
-const EXCLUDE = [
-  ":!test", ":!tools", ":!docs", ":!store", ":!*.md", ":!LICENSE",
-  ":!package.json", ":!package-lock.json", ":!.gitignore", ":!icons/source.jpg"
+// Only what Chrome loads goes in. An allowlist, because a blocklist ships every repo file added
+// later (process files, ledgers) until someone remembers to exclude it. The verify step below
+// fails the build if the manifest, an import or popup.html needs a file this leaves out.
+const INCLUDE = [
+  "manifest.json", ":(glob)*.js", ":(glob)*.html", ":(glob)*.css", ":(glob)icons/*.png"
 ];
 
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
@@ -32,7 +33,7 @@ if (dirty) {
 }
 
 fs.rmSync(zipPath, { force: true });
-run("git", ["archive", "--format=zip", "-o", zipPath, "HEAD", ...EXCLUDE]);
+run("git", ["archive", "--format=zip", "-o", zipPath, "HEAD", ...INCLUDE]);
 
 // ---- verify ---------------------------------------------------------------
 
