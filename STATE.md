@@ -13,6 +13,9 @@
 - `wiring.test.mjs` is a static guard suite: every `$("#id")` in `popup.js` must exist in
   `popup.html`, every `className = "x"` must have a `.x` rule in `popup.css`, and every
   `{type: "x"}` message must have a handler in `background.js`.
+- The panel runs in Playwright without a server: `context.route("https://as.test/**")` fulfilling
+  from the repo (https, or `crypto.subtle` is missing) plus `addInitScript({ path:
+  "test/e2e/chrome-stub.js" })`. Verified 2026-11-23. The UI checker's widths must be >= 200.
 - `storage.local` is shared between the normal and private-window instances by design;
   session state goes through `INSTANCE_AREA` (`storage.js:35`) instead.
 
