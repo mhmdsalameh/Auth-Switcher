@@ -187,6 +187,17 @@ const tests = {
     assert.deepEqual(matchedIds, ["x"]);
     assert.equal(rest.added, 1);
     assert.equal(rest.skipped, 1);
+
+    // The same user twice in one file: both records are skipped, but only one user matched.
+    const twice = mergeBackup(current, {
+      domains: ["k2dev.corp.com"],
+      sessions: [
+        { domains: ["k2dev.corp.com"], name: "Approver", username: "corp\\qa.app", password: "p" },
+        { domains: ["k2dev.corp.com"], name: "Approver copy", username: "corp\\qa.app", password: "p" }
+      ]
+    });
+    assert.equal(twice.added, 0);
+    assert.equal(twice.skipped, 2, "skipped counts records, not matched users");
   },
 
   async "malformed entries inside a payload are dropped"() {
