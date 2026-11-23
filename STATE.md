@@ -52,6 +52,14 @@ None.
 
 ## Last session
 
+**2026-11-23** — Scaffolded the AI-native SDLC (minimal init, `18ece27`) and opened cycle
+`bulk-link` on `feat/bulk-link`: intent approved by Mohammad Salameh (`5ee7ecd`), size
+new-system. Next: `/sdlc-arch` — a short `architecture.md` for the existing extension
+(modules, data ownership, credential boundary) plus an ADR for HTML-mockup designs, then
+`/sdlc-spec`. Pending human actions: create `.sdlc/ui-check.json` (guarded path), run the
+branch-protection command in `ci-gates.md`. The export fix for deleted domains is on
+`fix/export-deleted-domains` (`637078e`), not merged; `feat/url-switch` deletions are stashed.
+
 **2026-09-01** — Added multi-domain users. `Session.domain` (string) became
 `Session.domains` (string[]), with a v2→v3 migration. The add/edit form grew a
 collapsible checkbox dropdown listing the configured sites, shown only when more than one
