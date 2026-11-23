@@ -52,6 +52,20 @@ None.
 
 ## Last session
 
+**2026-11-23 (spec + ux)** — `/sdlc-spec` for bulk-link: `docs/sdlc/bulk-link/spec.md` R1–R14,
+approved by Mohammad Salameh (`c754a93`, gate recorded). Decisions: close all Worker boundary gaps
+this cycle (R13 — also found the active-user path never checks the user's own sites; the normal panel
+cannot clear the private instance's `activeByDomain`); bulk link / new-site / import-extra-sites set
+no signed-in user; bulk delete confirms naming every user; import extra sites come from the merged
+list; `mergeBackup` gains `addedIds`/`matchedIds`. WCAG 2.2 AA recorded in the design-system skill.
+`/sdlc-ux`: HTML mockup + 13 PNGs + `design.md` + inventory rows committed as draft (`2112a49`);
+new pattern Selectable row list (stable). Measured: `.btn-primary` white on `--accent` is 2.75:1 →
+use `--bg` text (6.05:1); `.choice-row` 23px → padding 6px; both approved, apply at Build.
+`sdlc-check design.md` has 1 error (no Figma URL, ADR 0004) — approve with `--accept-errors`.
+Pending: design approval; commit of `.sdlc/gates/*.jsonl` (guarded); `.playwright-mcp/` is
+untracked scratch, not ignored. Mockup needs an HTTP server (no Python here; Playwright blocks
+`file:`). Next: design approval, then `/sdlc-plan`.
+
 **2026-11-23 (arch)** — `/sdlc-arch` for bulk-link: root `architecture.md` + ADRs 0001–0004
 (modular monolith; credential boundary = configured ∩ user's sites, checked in the Worker; bulk
 changes in a pure `links.js` the Panel persists, `activeByDomain` cleared before `sessions` is
