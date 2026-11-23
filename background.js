@@ -78,6 +78,14 @@ async function getConfig() {
   return { ...local, activeByDomain: await readActiveByDomain(), tabAssignments };
 }
 
+// The credential boundary (ADR 0002): a password goes to a site only while that site is
+// configured AND the user is linked to it. The Panel clears stale signed-in users, but it cannot
+// reach the private instance's activeByDomain, and a pinned tab can roam — so the Worker checks
+// on every answer and every rule.
+function serves(session, site, domains) {
+  return !!session && domains.includes(site) && domainsOf(session).includes(site);
+}
+
 function basicHeader({ username, password }) {
   // RFC 7617: UTF-8 encode the credentials before base64.
   const bytes = new TextEncoder().encode(`${username}:${password}`);
@@ -117,7 +125,7 @@ async function syncRules() {
 
     for (const [tabId, sessionId] of Object.entries(tabAssignments)) {
       const session = byId.get(sessionId);
-      const owned = domainsOf(session);
+      const owned = domainsOf(session).filter((d) => serves(session, d, domains));
       if (!owned.length) continue;
       assignedTabIds.push(Number(tabId));
       // A pinned tab carries this user across every site they are configured for, so
@@ -137,7 +145,7 @@ async function syncRules() {
     // ones where they are actually the active one.
     for (const domain of domains) {
       const active = byId.get(activeByDomain[domain]);
-      if (!active) continue;
+      if (!serves(active, domain, domains)) continue;
       const extra = assignedTabIds.length ? { excludedTabIds: assignedTabIds } : {};
       addRules.push(authRule(id++, 1, active, [domain], extra));
     }
@@ -224,9 +232,11 @@ chrome.webRequest.onAuthRequired.addListener(
     // Let the native dialog appear rather than looping.
     if (await alreadyAttempted(details.requestId)) return callback({});
 
+    // A pinned tab answers as its own user or not at all: falling back to the site's signed-in
+    // user would hand that tab an identity it was never opened as.
     const sessionId = tabAssignments[details.tabId] ?? activeByDomain[domain];
     const session = sessions.find((s) => s.id === sessionId);
-    if (!session) return callback({});
+    if (!serves(session, domain, domains)) return callback({});
 
     await INSTANCE_AREA.set({ insecureHost: null });
     callback({

@@ -129,6 +129,30 @@ const multiSite = () => {
   });
 };
 
+// Credential boundary (spec R13): user a is linked to x only unless aSites says otherwise;
+// user b is linked to y. Both sites configured unless `domains` says otherwise.
+const boundary = ({ aSites = ["x.corp.com"], domains = ["x.corp.com", "y.corp.com"],
+                    activeByDomain = {}, tabAssignments, preemptive = false } = {}) => {
+  const env = makeChrome({
+    localStore: {
+      domains, preemptive, activeByDomain,
+      sessions: [
+        { id: "a", domains: aSites, name: "A", username: "a", password: "pa" },
+        { id: "b", domains: ["y.corp.com"], name: "B", username: "b", password: "pb" }
+      ]
+    }
+  });
+  if (tabAssignments) env.sessionStore.tabAssignments = tabAssignments;
+  return env;
+};
+
+const challenge = (env, url, tabId) => new Promise((resolve) => {
+  env.calls.onAuthRequired(
+    { url, scheme: "basic", requestId: String(Math.random()), tabId, isProxy: false },
+    resolve
+  );
+});
+
 const tests = {
   async "the selected domain's http cache is cleared, scoped to its origins"() {
     const env = makeChrome({ cookies: seed() });
@@ -416,6 +440,46 @@ const tests = {
     const digest = await answer("http://k2.corp.com/x", "digest");
     assert.equal(digest.authCredentials.password, "secret",
       "digest never puts the password on the wire, so http is fine");
+  },
+
+  async "R13 pinned tab gets no credentials on a site its user lacks"() {
+    const env = boundary({ tabAssignments: { 5: "a" }, activeByDomain: { "y.corp.com": "b" } });
+    await boot(env);
+    const reply = await challenge(env, "https://y.corp.com/", 5);
+    assert.deepEqual(Object.keys(reply), [], "no credentials, and no fallback to y's signed-in user");
+  },
+
+  async "R13 signed-in user not linked to the site gets none"() {
+    const env = boundary({ activeByDomain: { "y.corp.com": "a" } });
+    await boot(env);
+    assert.deepEqual(Object.keys(await challenge(env, "https://y.corp.com/", -1)), []);
+  },
+
+  async "R13 pinned user linked to the site still answered"() {
+    const env = boundary({ tabAssignments: { 5: "a" }, aSites: ["x.corp.com", "y.corp.com"] });
+    await boot(env);
+    const reply = await challenge(env, "https://y.corp.com/", 5);
+    assert.equal(reply.authCredentials.username, "a");
+  },
+
+  async "R13 a site no longer configured is never answered, even for a linked user"() {
+    const env = boundary({ activeByDomain: { "x.corp.com": "a" }, domains: ["y.corp.com"] });
+    await boot(env);
+    assert.deepEqual(Object.keys(await challenge(env, "https://x.corp.com/", -1)), []);
+  },
+
+  async "R13 syncRules pinned rules skip stale sites"() {
+    const env = boundary({ preemptive: true, tabAssignments: { 5: "a" }, aSites: ["x.corp.com", "stale.corp.com"] });
+    await boot(env);
+    const pinned = env.calls.rules.at(-1).addRules.filter((r) => r.condition.tabIds?.includes(5));
+    assert.deepEqual([...pinned.map((r) => r.condition.requestDomains[0])], ["x.corp.com"]);
+  },
+
+  async "R13 syncRules no active rule for an unlinked signed-in user"() {
+    const env = boundary({ preemptive: true, activeByDomain: { "x.corp.com": "a", "y.corp.com": "a" } });
+    await boot(env);
+    const sites = [...env.calls.rules.at(-1).addRules.map((r) => r.condition.requestDomains[0])];
+    assert.deepEqual(sites, ["x.corp.com"], "a's rule on x only; y gets no header");
   },
 
   async "auth retry guard survives worker termination"() {

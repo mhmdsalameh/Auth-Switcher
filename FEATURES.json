@@ -56,8 +56,8 @@
       "steps": ["serves() checked in onAuthRequired and syncRules; no pinned-to-active fallback"],
       "verify": "node test/background.test.mjs",
       "verify_kind": "command",
-      "status": "todo",
-      "evidence": "",
+      "status": "passing",
+      "evidence": "2026-11-23: node test/background.test.mjs -> All 28 passing; with background.js stashed, the 4 new R13 boundary tests fail",
       "blocked_by": "",
       "tracker": "",
       "notes": "plan.md step 4"
