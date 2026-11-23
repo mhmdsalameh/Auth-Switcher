@@ -45,7 +45,10 @@ None.
 ## Release state
 
 - **1.3.0** prepared on branch `release/1.3.0`: multi-site users, password reveal,
-  tab-following. `npm run package` builds `../auth-switcher-1.3.0.zip` from HEAD.
+  tab-following. Never uploaded or tagged.
+- **1.4.0** on `feat/bulk-link` (contains `release/1.3.0`): 1.3.0 plus Manage users (bulk link /
+  unlink / delete), import extra sites, users for a new site, Worker credential boundary (R13),
+  24px targets. `npm run package` builds `../auth-switcher-1.4.0.zip` from HEAD.
 - **No git tag yet, deliberately.** `tools/package.mjs` treats an existing `v<version>` tag
   as "already shipped" and refuses to build, so tag only *after* a successful upload.
 - **Blocking a store upload:** `store/screenshots/` still shows the 1.2.0 panel. New raw
