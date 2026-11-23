@@ -132,6 +132,9 @@ UI (F006–F008): `/sdlc-test` drives `popup.html` over HTTP with a `chrome` stu
   `writeChange`" fails until the existing popup writes move, so the two cannot be green apart.
   F009 also routes `setDomains` (chip removal) through `writeChange({ domains })` and the per-row
   delete through `links.js` `deleteUsers` instead of its own copy of the same rule.
+- `/sdlc-test` added a step for existing controls below WCAG 2.2 AA 24px targets: `.icon-btn`
+  min 24x24, `.chip-remove` 24x24 hit area (negative margin keeps the chip size), Settings ⚙
+  glyph replaced by an inline SVG gear (approved by Mohammad Salameh, 2026-11-23).
 
 ## Revisions
 - 2026-11-23 — proposed and approved by Mohammad Salameh (write order in `storage.js`; multi-session).

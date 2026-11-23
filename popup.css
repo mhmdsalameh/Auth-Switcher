@@ -212,6 +212,8 @@ p.hint { margin: 5px 0 0; }
   font-size: 12px;
   line-height: 1;
   padding: 5px 7px;
+  min-width: 24px;
+  min-height: 24px;
   cursor: pointer;
 }
 .icon-btn:hover { color: var(--text); }
@@ -330,7 +332,11 @@ p.hint { margin: 5px 0 0; }
   color: var(--muted);
   font-size: 11px;
   line-height: 1;
-  padding: 1px 3px;
+  /* A 24px target (WCAG 2.2 SC 2.5.8); the negative margin keeps the chip its old size. */
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+  margin: -6px -3px -6px -4px;
   cursor: pointer;
 }
 .chip-remove:hover { color: var(--text); }

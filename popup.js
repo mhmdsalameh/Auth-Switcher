@@ -534,7 +534,8 @@ function render() {
   $("#manage-toggle").hidden = off;
   // ✕ is reserved for #panel-close; a second ✕ here would read as "close the panel" too.
   // On either page this button is Back.
-  $("#settings-toggle").textContent = off ? "←" : "⚙";
+  $("#settings-icon").hidden = off;
+  $("#settings-back").hidden = !off;
   $("#settings-toggle").title = off ? "Back" : "Settings";
   $("#settings-toggle").setAttribute("aria-label", $("#settings-toggle").title);
 

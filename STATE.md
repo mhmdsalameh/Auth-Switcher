@@ -63,11 +63,13 @@ back to Import… / the site field after saving, import write errors shown, sear
 viewport meta. 7c cut 3 tests (`faabd72`); R10 test strengthened (`e3f4582`). Step 8: every R1–R14 and
 the wiring boundary rules shown to fail on a targeted break (list in the test report). UI checker
 (`sdlc-ui-check.cjs`, config `.playwright-mcp/ui-check/ui-check.json`, minTarget 24 = WCAG 2.2 AA,
-palette allowed): 18 FAIL left, all on controls unchanged from `main` (row ✎/✕ 22px tall, chip ✕
-15x13, ⚙ glyph flagged as emoji). Gate not armed: `.sdlc/ui-check.json` / `ui-gate.json` are guarded.
+palette allowed): PASS after the user-approved fix of 18 older controls (`.icon-btn` min 24px, chip ✕
+24px hit area via negative margin, ⚙ glyph -> inline SVG gear). Gate not armed: `.sdlc/ui-check.json`
+/ `ui-gate.json` are guarded.
 Seen, pre-existing: `mergeBackup` signs a user in on *every* configured site with nobody signed in,
-not only the file's sites; success copy says "Imported 1 users". **Pending human:** re-approve
-`plan.md` (stale); decide the 18 pre-existing UI FAILs; commit `.sdlc/gates/*.jsonl`.
+not only the file's sites; success copy says "Imported 1 users". `plan.md` re-approved. No `evals/` set: skipped this cycle by the user's decision.
+**Pending human:** commit `.sdlc/gates/*.jsonl` (guarded); a real-Chrome load of the unpacked
+extension is still never done (the e2e used a `chrome` stub).
 **Next action:** `/sdlc-review`.
 
 **2026-11-23 (build, session 1 continued)** — F006–F008 code complete: `popup.css` approved
