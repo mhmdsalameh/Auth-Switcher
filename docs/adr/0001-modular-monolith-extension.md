@@ -1,6 +1,6 @@
 # 0001 — One MV3 package as a modular monolith, boundaries checked by tests
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-11-23   **Deciders:** Mohammad Salameh   **Relates to:** `architecture.md` @ draft (cycle bulk-link)
 
 ## Context

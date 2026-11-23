@@ -5,8 +5,8 @@
      Sections that assume servers (gateways, service SLOs, tenancy) are answered "n/a" with the
      reason rather than left out. -->
 
-- **From intent:** `docs/sdlc/bulk-link/intent.md` @ 5ee7ecd   **Status:** draft
-- **Architect / approver:** Mohammad Salameh (pending)   **Date:** 2026-11-23
+- **From intent:** `docs/sdlc/bulk-link/intent.md` @ 5ee7ecd   **Status:** approved
+- **Architect / approver:** Mohammad Salameh   **Date:** 2026-11-23
 - **Supersedes:** none (first architecture record; the code predates the SDLC)
 
 ## 1. Context (C4 level 1)
@@ -238,7 +238,7 @@ only network hop is Chrome's own request to the protected site, which the extens
 ## 9. Decisions log
 | ADR | Decision | Status |
 |-----|----------|--------|
-| `docs/adr/0001-modular-monolith-extension.md` | one MV3 package, modules as ES module files, boundaries checked by `wiring.test.mjs` | proposed |
-| `docs/adr/0002-credential-boundary.md` | a password goes only to a site that is configured and in the user's sites; checked in the Worker | proposed |
-| `docs/adr/0003-pure-links-module.md` | bulk link / unlink / delete live in a pure `links.js`; the Panel persists | proposed |
-| `docs/adr/0004-html-mockup-designs.md` | UX designs are committed HTML mockups, not Figma | proposed |
+| `docs/adr/0001-modular-monolith-extension.md` | one MV3 package, modules as ES module files, boundaries checked by `wiring.test.mjs` | accepted |
+| `docs/adr/0002-credential-boundary.md` | a password goes only to a site that is configured and in the user's sites; checked in the Worker | accepted |
+| `docs/adr/0003-pure-links-module.md` | bulk link / unlink / delete live in a pure `links.js`; the Panel persists | accepted |
+| `docs/adr/0004-html-mockup-designs.md` | UX designs are committed HTML mockups, not Figma | accepted |

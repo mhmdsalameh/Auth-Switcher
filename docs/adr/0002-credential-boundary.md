@@ -1,6 +1,6 @@
 # 0002 — A password goes only to a site that is configured and linked to that user
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-11-23   **Deciders:** Mohammad Salameh   **Relates to:** `architecture.md` §5 @ draft (cycle bulk-link)
 
 ## Context

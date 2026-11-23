@@ -1,6 +1,6 @@
 # 0003 — Bulk link, unlink and delete live in a pure `links.js`; the Panel persists
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-11-23   **Deciders:** Mohammad Salameh   **Relates to:** `architecture.md` §3 @ draft; `docs/sdlc/bulk-link/intent.md`
 
 ## Context

@@ -1,6 +1,6 @@
 # 0004 — UX designs are committed HTML mockups, not Figma
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-11-23   **Deciders:** Mohammad Salameh   **Relates to:** `docs/sdlc/bulk-link/intent.md` (Constraints)
 
 ## Context
