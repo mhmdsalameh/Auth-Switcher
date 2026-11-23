@@ -30,8 +30,8 @@
       "steps": ["links.js exports linkUsers, unlinkUsers, deleteUsers, addSiteWithUsers per spec contract"],
       "verify": "node test/links.test.mjs",
       "verify_kind": "command",
-      "status": "todo",
-      "evidence": "",
+      "status": "passing",
+      "evidence": "2026-11-23: node test/links.test.mjs -> All 25 passing (suite failed on the missing module before links.js existed)",
       "blocked_by": "",
       "tracker": "",
       "notes": "plan.md step 2"
