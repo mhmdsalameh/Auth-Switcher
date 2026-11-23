@@ -2,7 +2,7 @@
 
 - **Author / role:** Claude (SDLC orchestrator), with Mohammad Salameh
 - **Date:** 2026-11-23
-- **Status:** draft
+- **Status:** approved
 - **Product owner:** Mohammad Salameh
 - **Size:** new-system
 - **Size reason:** the change decides which sites receive each stored password, and one path deletes users — the "always new-system" rule (sensitive data). No new subsystem; no architecture or infrastructure stage.
