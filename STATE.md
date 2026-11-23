@@ -48,7 +48,9 @@ None.
   tab-following. Never uploaded or tagged.
 - **1.4.0** on `feat/bulk-link` (contains `release/1.3.0`): 1.3.0 plus Manage users (bulk link /
   unlink / delete), import extra sites, users for a new site, Worker credential boundary (R13),
-  24px targets. `npm run package` builds `../auth-switcher-1.4.0.zip` from HEAD.
+  24px targets. Built 2026-11-23 from `b18e864` (`SDLC_RELEASE_AUTH=release-1.4.0`):
+  `../auth-switcher-1.4.0.zip`, 13 files, 48.4 KB. `tools/package.mjs` now archives an allowlist
+  (manifest, top-level js/html/css, icons/*.png); the old blocklist shipped `.sdlc/` etc.
 - **No git tag yet, deliberately.** `tools/package.mjs` treats an existing `v<version>` tag
   as "already shipped" and refuses to build, so tag only *after* a successful upload.
 - **Blocking a store upload:** `store/screenshots/` still shows the 1.2.0 panel. New raw
