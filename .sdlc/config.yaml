@@ -1,0 +1,52 @@
+# .sdlc/config.yaml — per-repo AI-native SDLC settings.
+# Read by ~/.claude/hooks/sdlc-guard.ps1 to enforce the gates. Keep the key names below.
+stages: [plan, design, build, test, deploy, maintain]
+
+# Stage order. "artifacts": the guard blocks writing spec.md, infrastructure.md, design.md or plan.md
+# (repo root or docs/sdlc/**) until the artifact before it is approved in .sdlc/gates/
+# (scripts/sdlc-gate.cjs). Source code edits are never blocked by this. "off" disables it.
+stage_order: artifacts
+
+# Review risk tiers, read by `sdlc-check.cjs tier`. Tier 3 if any changed path matches tier3_paths;
+# tier 1 only if every changed path matches tier1_paths; tier 2 otherwise. Keep REVIEW.md in step.
+# background.js decides where credentials are sent; backup.js handles passwords and encryption;
+# storage.js and manifest.json hold the stored shape and the permissions.
+tier3_paths:
+  - "background.js"
+  - "backup.js"
+  - "storage.js"
+  - "manifest.json"
+  - ".github/workflows/"
+tier1_paths:
+  - "docs/**"
+  - "*.md"
+  - "store/**"
+  - "icons/**"
+
+# Flat repo: one manifest at the root, no top-level areas. repo-docs-check warns about that; the
+# root CLAUDE.md and CODEMAP.md cover the whole tree.
+# areas:
+
+# PreToolUse guard blocks Edit/Write to any path CONTAINING one of these fragments.
+protected_paths:
+  - .sdlc/
+  - .github/workflows/
+
+# Bug-fix protection: while a bug-fix session is DECLARED - a `.sdlc/BUGFIX` marker file exists, or
+# the SDLC_BUGFIX env var is set - block edits to test files so the code is fixed, not the test.
+protect_tests_when_fixing: true
+test_path_fragments: [test/]
+
+# PreToolUse guard blocks Bash commands MATCHING these regexes until a named release
+# authorization is present. Authorize by prefixing the command with SDLC_RELEASE_AUTH=<ticket>.
+# Production for this repo is a Chrome Web Store upload (manual, in the dashboard); the commands
+# below are the local steps that make a release.
+prod_gate_command_patterns:
+  - "npm run package"
+  - "git tag v"
+  - "git push .*--tags"
+
+autonomy:
+  development: free        # load unpacked in a local Chrome
+  staging: moderate        # not used: there is no staging channel
+  production: gate_only    # Chrome Web Store; the agent stops at the gate

@@ -1,0 +1,22 @@
+# Stage 6 (Maintain). Control-band monitoring - version-controlled response tiers.
+# A deterministic detection script (scripts/sdlc-bands.cjs) applies Western Electric rules and
+# invokes Claude only at 2sigma and above.
+
+# No metrics store is connected: the extension sends no telemetry. While this is "none",
+# detection is not running and /sdlc-maintain says so instead of simulating a breach.
+data_source: none
+
+metrics:
+  - metric: ci_test_failure_rate
+    source: GitHub Actions run history for the "CI gates" workflow (gh run list)
+    baseline: rolling_30
+    direction: up
+    min_baseline: 20
+    rules: western_electric
+    tiers:
+      1sigma: { action: log }
+      2sigma: { action: diagnose, tools: "Read,Grep,Bash(gh run view *)" }
+      3sigma: { action: propose, routes: [pull_request] }
+
+intent_on_breach: true
+add_eval_per_incident: true

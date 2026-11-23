@@ -1,0 +1,82 @@
+# CI gates — the checks that must pass before a change can merge. Policy: ci-gates.md.
+#
+# Make the jobs below REQUIRED status checks in branch protection, or they are decorative.
+#
+# Removed from the template because they do not apply to this repo: lint and type check (none
+# configured), dependency audit (no dependencies, no lockfile), build (the extension ships as
+# source; `npm run package` zips it and refuses to run outside a clean tagged tree), API
+# contracts, event schemas, infrastructure policy, load and fault-injection tests, migrations.
+
+name: CI gates
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Syntax check and tests
+        run: npm test
+        # The tests are plain Node scripts, not a test runner: no coverage figure and no JUnit XML
+        # exist yet, so there is no coverage floor and no flaky-test history.
+
+  security:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # the scan checks past commits too
+      - uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Exported backups hold QA passwords in the clear when no passphrase is set (.gitignore
+      # blocks *-users-*.json). Findings are fixed or triaged in security-gate.md.
+
+  architecture:
+    name: Navigation docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Navigation docs keep up with the structure
+        run: node .sdlc/bin/repo-docs-check.cjs
+
+  traceability:
+    name: Requirements have tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Every R-ID in each spec appears in a test
+        shell: bash
+        run: |
+          set -euo pipefail
+          specs=$(ls docs/sdlc/*/spec.md 2>/dev/null || true)
+          if [ -z "$specs" ]; then echo "no spec.md — skipping"; exit 0; fi
+          missing=0
+          for spec in $specs; do
+            # --exclude-dir=docs matters: spec.md itself contains every R-ID.
+            ids=$(grep -oE '^#{2,4} +R[0-9]+' "$spec" | grep -oE 'R[0-9]+' | sort -u || true)
+            if [ -z "$ids" ]; then
+              echo "::error::found no R-IDs in $spec - the heading pattern does not match this spec"; missing=1; continue
+            fi
+            for id in $ids; do
+              if ! grep -rqE "\b${id}\b" --include='*.test.mjs' test ; then
+                echo "::error::$spec $id has no test referencing it"; missing=1
+              fi
+            done
+          done
+          exit $missing
