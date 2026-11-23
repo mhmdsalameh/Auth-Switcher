@@ -147,6 +147,48 @@ const tests = {
     assert.equal(again.skipped, 1);
   },
 
+  async "R9 mergeBackup reports addedIds and matchedIds"() {
+    const current = {
+      domains: ["k2.corp.com"],
+      sessions: [
+        { id: "e", domains: ["k2.corp.com"], name: "E", username: "e", password: "p" },
+        { id: "f", domains: ["k2.corp.com"], name: "F", username: "f", password: "p" }
+      ],
+      activeByDomain: {}
+    };
+    const result = mergeBackup(current, {
+      domains: ["k2.corp.com"],
+      sessions: [
+        { domains: ["k2.corp.com"], name: "E", username: "e", password: "p" },
+        { domains: ["k2.corp.com"], name: "E again", username: "e", password: "p" },
+        { domains: ["k2.corp.com"], name: "C", username: "c", password: "p" },
+        // Covered only by C, added a line above: already in addedIds, so not "matched".
+        { domains: ["k2.corp.com"], name: "C again", username: "c", password: "p" }
+      ]
+    }, () => "new-c");
+
+    assert.deepEqual(result.addedIds, ["new-c"]);
+    assert.deepEqual(result.matchedIds, ["e"], "first match per record, no duplicates");
+    assert.equal(result.added, 1);
+    assert.equal(result.skipped, 3);
+  },
+
+  async "R10 result unchanged apart from the new id fields"() {
+    const current = {
+      domains: ["k2dev.corp.com"],
+      sessions: [{ id: "x", domains: ["k2dev.corp.com"], name: "Approver", username: "corp\\qa.app", password: "old" }],
+      activeByDomain: { "k2dev.corp.com": "x" }
+    };
+    const payload = await roundTrip(sample, "");
+    let i = 0;
+    const { addedIds, matchedIds, ...rest } = mergeBackup(current, payload, () => `id-${++i}`);
+    assert.deepEqual(Object.keys(rest).sort(), ["activeByDomain", "added", "domains", "sessions", "skipped"]);
+    assert.deepEqual(addedIds, ["id-1"]);
+    assert.deepEqual(matchedIds, ["x"]);
+    assert.equal(rest.added, 1);
+    assert.equal(rest.skipped, 1);
+  },
+
   async "malformed entries inside a payload are dropped"() {
     const empty = { domains: [], sessions: [], activeByDomain: {} };
     const result = mergeBackup(empty, {

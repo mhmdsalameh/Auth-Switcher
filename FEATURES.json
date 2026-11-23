@@ -17,8 +17,8 @@
       "steps": ["mergeBackup returns addedIds and matchedIds alongside added/skipped"],
       "verify": "node test/backup.test.mjs",
       "verify_kind": "command",
-      "status": "todo",
-      "evidence": "",
+      "status": "passing",
+      "evidence": "2026-11-23: node test/backup.test.mjs -> All 16 passing (R9, R10 tests failed before the change)",
       "blocked_by": "",
       "tracker": "",
       "notes": "plan.md step 1"

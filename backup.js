@@ -152,11 +152,20 @@ export function mergeBackup(current, payload, newId = () => crypto.randomUUID())
   // each other and not just against what was already installed.
   const sessions = [...current.sessions];
   const added = [];
+  // Ids of users already installed that stood in for a skipped record, so a caller can give
+  // them whatever it gives the imported ones without re-implementing covered().
+  const matchedIds = [];
+  const addedIds = new Set();
   for (const session of incoming) {
-    if (sessions.some((existing) => covered(existing, session))) continue;
+    const match = sessions.find((existing) => covered(existing, session));
+    if (match) {
+      if (!addedIds.has(match.id) && !matchedIds.includes(match.id)) matchedIds.push(match.id);
+      continue;
+    }
     const record = { ...session, id: newId() };
     sessions.push(record);
     added.push(record);
+    addedIds.add(record.id);
   }
 
   const activeByDomain = { ...current.activeByDomain };
@@ -171,6 +180,8 @@ export function mergeBackup(current, payload, newId = () => crypto.randomUUID())
     sessions,
     activeByDomain,
     added: added.length,
-    skipped: incoming.length - added.length
+    skipped: incoming.length - added.length,
+    addedIds: [...addedIds],
+    matchedIds
   };
 }
