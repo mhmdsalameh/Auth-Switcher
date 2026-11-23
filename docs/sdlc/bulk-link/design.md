@@ -4,8 +4,8 @@
 
 - **From:** `spec.md` @ c754a93
 - **Figma file:** none — HTML mockup `design/mockup.html` loading the shipped `popup.css` (ADR 0004)
-- **Status:** draft
-- **Approved by:**
+- **Status:** approved
+- **Approved by:** Mohammad Salameh, 2026-11-23
 
 Mockup: serve the repo root over HTTP and open `docs/sdlc/bulk-link/design/mockup.html`. Each frame
 is 320px wide (Chrome's side panel minimum) except `manage-narrow` (180px, page zoom). CSS the
