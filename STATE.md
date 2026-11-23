@@ -52,6 +52,15 @@ None.
 
 ## Last session
 
+**2026-11-23 (arch)** — `/sdlc-arch` for bulk-link: root `architecture.md` + ADRs 0001–0004
+(modular monolith; credential boundary = configured ∩ user's sites, checked in the Worker; bulk
+changes in a pure `links.js` the Panel persists, `activeByDomain` cleared before `sessions` is
+written; HTML mockup designs). Approved by Mohammad Salameh (`d31b932`), with 5 accepted
+server-only lint errors. Found: `onAuthRequired` answers a tab-pinned user for any configured site
+without checking that user's own sites — `/sdlc-spec` decides whether this cycle closes it, with the
+`syncRules` gap. Boundary rules go into `test/wiring.test.mjs` at Build. `/sdlc-infra` skipped (no
+hosting). Next: `/sdlc-spec`.
+
 **2026-11-23** — Scaffolded the AI-native SDLC (minimal init, `18ece27`) and opened cycle
 `bulk-link` on `feat/bulk-link`: intent approved by Mohammad Salameh (`5ee7ecd`), size
 new-system. Next: `/sdlc-arch` — a short `architecture.md` for the existing extension
