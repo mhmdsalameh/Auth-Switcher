@@ -44,5 +44,5 @@ description: Auth Switcher's design system — hard visual rules, tokens, compon
 - None recorded (no Figma source).
 
 ## Accessibility baseline
-- **Target:** unknown — not set in any spec yet
+- **Target:** WCAG 2.2 AA for new and changed controls (approved with `docs/sdlc/bulk-link/spec.md`, 2026-11-23)
 - **Minimum contrast / focus style / touch-target size used here:** unknown

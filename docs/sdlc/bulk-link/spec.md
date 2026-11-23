@@ -4,7 +4,7 @@
 
 - **From intent:** `docs/sdlc/bulk-link/intent.md` @ 5ee7ecd (approved); architecture `architecture.md` @ d31b932 (approved)
 - **Author / prompt+skill versions:** Claude Opus 5.5 (`claude-opus-5-5`) with Mohammad Salameh; `/sdlc-spec`; skills `ai-native-sdlc`, `production-readiness`, `requirements-elicitation`, `project-types` (web profile), `codebase-navigation` from `~/.claude` @ f647b37; project skill `design-system` @ e92cd78
-- **Status:** draft
+- **Status:** approved
 
 ## Problem & proposed solution
 **Problem (from the intent).** A tester links or unlinks a site one user at a time, through each
@@ -272,7 +272,7 @@ One predicate, used in both paths: `serves(session, site, domains)` = `site ∈ 
 | security | Tier-3 files change (`background.js`, `backup.js`) | Mohammad Salameh | carried to `/sdlc-review`: tier-3 review with two reviewers |
 | compliance | No new data, no data leaves the device; `PRIVACY.md` unchanged | Mohammad Salameh | resolved: no change needed; re-confirmed in `security-gate.md` at release |
 | brand / UX | Deletions are final; confirmation must name every user (R5, R12) | Mohammad Salameh | resolved by R5 and R12; copy reviewed at `/sdlc-ux` |
-| brand / UX | Accessibility target WCAG 2.2 AA is new for this repo (design system says "unknown") | Mohammad Salameh | open: approve with this spec, then record it in the design-system skill |
+| brand / UX | Accessibility target WCAG 2.2 AA is new for this repo (design system says "unknown") | Mohammad Salameh | resolved: approved with this spec 2026-11-23; recorded in the design-system skill |
 
 ## Success criteria
 - R1–R14 each have at least one passing test named with the R-ID (`sdlc-check.cjs trace`).
