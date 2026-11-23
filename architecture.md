@@ -81,7 +81,7 @@ own session state (`INSTANCE_AREA`).
 ## 3. Modules and boundaries
 | Module | Path | Responsibility | Public contract | May depend on | Owner |
 |--------|------|----------------|-----------------|---------------|-------|
-| Storage | `storage.js` | the one stored shape and defaults; per-instance state accessors | `storage.js` exports: `STORAGE_DEFAULTS`, `INSTANCE_DEFAULTS`, `IS_INCOGNITO`, `INSTANCE_AREA`, `readActiveByDomain`, `writeActiveByDomain`, `readInstanceState` | none | Mohammad Salameh |
+| Storage | `storage.js` | the one stored shape and defaults; per-instance state accessors | `storage.js` exports: `STORAGE_DEFAULTS`, `INSTANCE_DEFAULTS`, `IS_INCOGNITO`, `INSTANCE_AREA`, `readActiveByDomain`, `writeActiveByDomain`, `writeChange`, `readInstanceState` | none | Mohammad Salameh |
 | Backup | `backup.js` | backup file build / open / merge; site normalisation; reading a user's sites | `backup.js` exports: `FORMAT`, `normalizeDomain`, `domainsOf`, `buildBackup`, `parseBackup`, `openBackup`, `mergeBackup` | none | Mohammad Salameh |
 | Links (new, this cycle) | `links.js` | bulk link, bulk unlink, bulk delete, extra sites at import, users for a new site — as pure state transforms returning the next `sessions` and `activeByDomain` | `links.js` exports (named in `spec.md`) | Backup | Mohammad Salameh |
 | Worker | `background.js` | credential answering, DNR rules, switching, migration | message handlers `switch`, `openAs`, `sync` (handler object in `background.js`) | Storage, Backup | Mohammad Salameh |

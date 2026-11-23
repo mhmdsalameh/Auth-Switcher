@@ -8,9 +8,11 @@ Vanilla JS, no build step, no dependencies. Flat repo — `CODEMAP.md` maps ever
 - `SDLC.md` — this repo follows the AI-native SDLC; cycles live in `docs/sdlc/<slug>/`.
 
 ## Commands
-- All checks: `npm test` (syntax check of the four entry files, then every test script)
+- All checks: `npm test` (syntax check of the five source modules, then every test script)
 - Scoped: `node test/backup.test.mjs` (export/import, merge) · `node test/background.test.mjs`
-  (worker, rules, migrate) · `node test/wiring.test.mjs` (manifest, DOM ids, messages)
+  (worker, rules, migrate, credential boundary) · `node test/wiring.test.mjs` (manifest, DOM ids,
+  messages, module boundaries) · `node test/links.test.mjs` (bulk link/unlink/delete) ·
+  `node test/storage.test.mjs` (`writeChange` order)
 - Package for the store: `npm run package` — production gate; needs a clean tree.
 
 ## Gotchas

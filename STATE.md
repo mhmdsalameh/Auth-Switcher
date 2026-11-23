@@ -52,6 +52,21 @@ None.
 
 ## Last session
 
+**2026-11-23 (build, session 1)** — `/sdlc-plan` for bulk-link: `plan.md` approved by Mohammad
+Salameh (`a46bd2f`, gate recorded); multi-session build with `FEATURES.json` (F001–F010) and
+`init.ps1` (smoke test = `npm test`). Landed: F001 `mergeBackup` `addedIds`/`matchedIds`
+(`ac67bfd`); F002 `links.js` + `test/links.test.mjs` (`ee4f30d`); F003 `storage.js`
+`writeChange()` + `test/storage.test.mjs` (`fea3c48`); F004 Worker `serves()` boundary in
+`onAuthRequired`/`syncRules` (`807dfde`); F005+F009 wiring boundary rules and every popup write
+through `writeChange` (`3134967`). `npm test`: wiring PASS, backup 16, links 25, storage 3,
+background 28. Facts: VM-built arrays need spreading before `deepEqual` (foreign prototype);
+`storage.js` can be imported fresh per test with a `?instance=N` query under a `chrome` stub.
+**Pending human:** `plan.md` is `stale` (Departures note for F005+F009) — re-approve with
+`sdlc-gate.cjs approve docs/sdlc/bulk-link/plan.md --by "Mohammad Salameh"`. `.sdlc/gates/*.jsonl`
+still uncommitted (guarded). **Next action:** run `./init.ps1`, then F006 — `popup.css` approved
+additions, then `popup.html` + `popup.js` Manage users page (plan.md steps 6–8); then F007 import
+step, F008 add-site form, F010 `CODEMAP.md`.
+
 **2026-11-23 (spec + ux)** — `/sdlc-spec` for bulk-link: `docs/sdlc/bulk-link/spec.md` R1–R14,
 approved by Mohammad Salameh (`c754a93`, gate recorded). Decisions: close all Worker boundary gaps
 this cycle (R13 — also found the active-user path never checks the user's own sites; the normal panel

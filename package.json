@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --check background.js && node --check popup.js && node --check backup.js && node --check storage.js && node test/wiring.test.mjs && node test/backup.test.mjs && node test/background.test.mjs",
+    "test": "node --check background.js && node --check popup.js && node --check backup.js && node --check storage.js && node --check links.js && node test/wiring.test.mjs && node test/backup.test.mjs && node test/links.test.mjs && node test/storage.test.mjs && node test/background.test.mjs",
     "package": "npm test && node tools/package.mjs"
   }
 }
