@@ -1,5 +1,8 @@
 node_modules/
 
+# Playwright MCP scratch output (e2e screenshots, logs, captured UI states)
+.playwright-mcp/
+
 # Codemap staleness tracker
 .codemap-dirty
 
