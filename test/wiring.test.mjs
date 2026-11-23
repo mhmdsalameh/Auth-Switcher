@@ -56,8 +56,46 @@ for (const size of [16, 32, 48, 128]) {
   }
 }
 
+// Module boundaries (architecture.md §3). Code only — comments may name what is forbidden.
+const stripComments = (src) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+const modules = Object.fromEntries(
+  ["storage.js", "backup.js", "links.js", "background.js", "popup.js"].map((f) => [f, read(f)])
+);
+const importsOf = (src) => [...src.matchAll(/from "\.\/([^"]+)"/g)].map((m) => m[1]);
+for (const pure of ["backup.js", "links.js"]) {
+  const code = stripComments(modules[pure]);
+  for (const [pattern, what] of [[/\bchrome\./, "chrome.*"], [/\bdocument\b/, "the DOM"], [/\bfetch\(/, "fetch"]]) {
+    if (pattern.test(code)) fail.push(`${pure} must stay pure but uses ${what}`);
+  }
+}
+const linksImports = importsOf(modules["links.js"]);
+if (linksImports.some((f) => f !== "backup.js")) {
+  fail.push(`links.js may import only ./backup.js, found: ${linksImports}`);
+}
+for (const [file, src] of Object.entries(modules)) {
+  for (const target of importsOf(src)) {
+    if (target === "popup.js" || target === "background.js") fail.push(`${file} imports ${target}`);
+  }
+}
+const reaches = (from, to, seen = new Set()) =>
+  importsOf(modules[from] ?? "").some((next) =>
+    next === to || (!seen.has(next) && (seen.add(next), reaches(next, to, seen))));
+for (const file of Object.keys(modules)) {
+  if (reaches(file, file)) fail.push(`import cycle through ${file}`);
+}
+
+// The Panel saves users and sites through writeChange() only, which clears a lost signed-in
+// user before writing sessions (spec R7). A direct write would skip that order.
+const popupCode = stripComments(js);
+if (/storage\.local\.set\(\{[^}]*\b(sessions|domains)\b/.test(popupCode)) {
+  fail.push("popup.js writes sessions or domains directly — use writeChange()");
+}
+if (/writeActiveByDomain/.test(popupCode)) {
+  fail.push("popup.js writes activeByDomain directly — use writeChange()");
+}
+
 // A bad relative import in an MV3 module script fails silently at runtime.
-for (const [file, src] of [["popup.js", js], ["background.js", bg]]) {
+for (const [file, src] of [["popup.js", js], ["background.js", bg], ["links.js", modules["links.js"]]]) {
   for (const [, spec] of src.matchAll(/from "(\.\/[^"]+)"/g)) {
     if (!fs.existsSync(new URL(spec.slice(2), root))) {
       fail.push(`${file} imports missing module: ${spec}`);

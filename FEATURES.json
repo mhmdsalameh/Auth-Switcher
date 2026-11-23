@@ -69,11 +69,11 @@
       "steps": ["Backup/Links pure; Links imports only backup.js; no imports of popup.js/background.js; no cycles; popup writes sessions only via writeChange"],
       "verify": "node test/wiring.test.mjs",
       "verify_kind": "command",
-      "status": "todo",
-      "evidence": "",
+      "status": "passing",
+      "evidence": "2026-11-23: node test/wiring.test.mjs -> PASS; failed with the two writeChange rules before popup.js was migrated. Purity and cycle rules not yet mutation-tested (/sdlc-test step 8)",
       "blocked_by": "",
       "tracker": "",
-      "notes": "plan.md step 5"
+      "notes": "plan.md step 5; committed together with F009"
     },
     {
       "id": "F006",
@@ -126,11 +126,11 @@
       "steps": ["Every popup.js write of sessions goes through writeChange"],
       "verify": "node test/wiring.test.mjs",
       "verify_kind": "command",
-      "status": "todo",
-      "evidence": "",
+      "status": "passing",
+      "evidence": "2026-11-23: node test/wiring.test.mjs -> PASS after per-row delete, edit save, add save, import and setDomains moved to writeChange; failed before",
       "blocked_by": "",
       "tracker": "",
-      "notes": "plan.md step 8"
+      "notes": "plan.md step 8; committed together with F005 so npm test stays green"
     },
     {
       "id": "F010",

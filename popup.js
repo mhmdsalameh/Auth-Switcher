@@ -6,9 +6,10 @@ import {
   INSTANCE_DEFAULTS,
   IS_INCOGNITO,
   readActiveByDomain,
-  writeActiveByDomain,
+  writeChange,
   readInstanceState
 } from "./storage.js";
+import { deleteUsers } from "./links.js";
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -178,7 +179,7 @@ function renderDomains() {
 
 async function setDomains(next) {
   const domains = [...new Set(next.map(normalizeDomain).filter(Boolean))];
-  await chrome.storage.local.set({ domains });
+  await writeChange({ domains });
   await load();
 }
 
@@ -271,15 +272,8 @@ function buildRow(session) {
     : `Remove ${session.name}`;
   delBtn.setAttribute("aria-label", delBtn.title);
   delBtn.addEventListener("click", async () => {
-    const sessions = state.sessions.filter((x) => x.id !== session.id);
-    const activeByDomain = { ...state.activeByDomain };
-    // This user may be the signed-in one on several sites; none of them may be left
-    // pointing at an id that no longer exists.
-    for (const [d, id] of Object.entries(activeByDomain)) {
-      if (id === session.id) delete activeByDomain[d];
-    }
-    await chrome.storage.local.set({ sessions });
-    await writeActiveByDomain(activeByDomain);
+    // This user may be the signed-in one on several sites; deleteUsers clears every one.
+    await writeChange(deleteUsers(state, [session.id]));
     await load();
   });
 
@@ -762,8 +756,7 @@ $("#import-form").addEventListener("submit", async (e) => {
 
 async function applyImport(payload) {
   const { domains, sessions, activeByDomain, added, skipped } = mergeBackup(state, payload);
-  await chrome.storage.local.set({ domains, sessions });
-  await writeActiveByDomain(activeByDomain);
+  await writeChange({ activeByDomain, sessions, domains });
   await load();
   backupStatus(
     skipped ? `Imported ${added} users, skipped ${skipped} already here.` : `Imported ${added} users.`
@@ -819,8 +812,7 @@ $("#add-form").addEventListener("submit", async (e) => {
     for (const d of chosen) activeByDomain[d] ??= editingId;
 
     closeUserForm();
-    await chrome.storage.local.set({ sessions });
-    await writeActiveByDomain(activeByDomain);
+    await writeChange({ activeByDomain, sessions });
     await load();
     return;
   }
@@ -844,8 +836,7 @@ $("#add-form").addEventListener("submit", async (e) => {
   for (const d of chosen) activeByDomain[d] ??= session.id;
 
   closeUserForm();
-  await chrome.storage.local.set({ sessions: [...state.sessions, session] });
-  await writeActiveByDomain(activeByDomain);
+  await writeChange({ activeByDomain, sessions: [...state.sessions, session] });
   await load();
 });
 

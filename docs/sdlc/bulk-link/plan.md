@@ -128,7 +128,10 @@ UI (F006–F008): `/sdlc-test` drives `popup.html` over HTTP with a `chrome` stu
 
 ## Departures from plan
 <!-- If implementation diverged, record what and why. Keep plan.md matching the merged diff. -->
-None yet.
+- F005 and F009 land in one commit: the wiring rule "popup.js writes sessions only through
+  `writeChange`" fails until the existing popup writes move, so the two cannot be green apart.
+  F009 also routes `setDomains` (chip removal) through `writeChange({ domains })` and the per-row
+  delete through `links.js` `deleteUsers` instead of its own copy of the same rule.
 
 ## Revisions
 - 2026-11-23 — proposed and approved by Mohammad Salameh (write order in `storage.js`; multi-session).
