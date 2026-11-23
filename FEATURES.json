@@ -70,7 +70,7 @@
       "verify": "node test/wiring.test.mjs",
       "verify_kind": "command",
       "status": "passing",
-      "evidence": "2026-11-23: node test/wiring.test.mjs -> PASS; failed with the two writeChange rules before popup.js was migrated. Purity and cycle rules not yet mutation-tested (/sdlc-test step 8)",
+      "evidence": "2026-11-23: node test/wiring.test.mjs -> PASS; failed with the two writeChange rules before popup.js was migrated. /sdlc-test step 8: links.js using document + importing storage.js, storage.js importing popup.js, a backup.js <-> links.js cycle and a direct storage.local.set({ domains }) in popup.js each made wiring report its own rule",
       "blocked_by": "",
       "tracker": "",
       "notes": "plan.md step 5; committed together with F009"
@@ -87,8 +87,8 @@
       ],
       "verify": "/sdlc-test e2e: drive popup.html over HTTP with a chrome stub (test/e2e/), keyboard path, screenshots vs docs/sdlc/bulk-link/design/manage-*.png and confirm-*.png",
       "verify_kind": "manual",
-      "status": "in_progress",
-      "evidence": "2026-11-23: code complete; npm test green. Not rendered: local HTTP server blocked by the auto-mode classifier. Scratch fake-DOM smoke (not a UI check) ran select all -> unlink x -> Keep them (writes activeByDomain then sessions; status 'Unlinked 1 user from x.corp.com.') and bulk delete (both active entries cleared); stale-only user not listed.",
+      "status": "passing",
+      "evidence": "2026-11-23 /sdlc-test: popup.html driven in Playwright (repo served by route.fulfill over https, test/e2e/chrome-stub.js). Link 3 users to 2 sites: one sessions write, activeByDomain unchanged. Unlink leaving 2 orphans: Confirm deletion names both, Keep them focused; Cancel -> back to Choose sites, 0 writes; Keep them -> activeByDomain then sessions, 'Unlinked 1 user from k2.corp.com.'; Delete -> 'Unlinked 1 user from k2.corp.com. Deleted 2 users.'. Bulk delete: Cancel primary + focused, Cancel returns focus to Delete users, 0 writes; Delete clears both active entries. Stale-only user not listed; search at 5 users; keyboard-only link flow end to end with visible focus; Escape returns focus to the opener. Screenshots match manage-none/-link/-unlink-empty/-result/-empty, confirm-last-site, confirm-delete; manage-narrow fixed in b54aedd (search had ~16px at 180px). Breaking the bulk-delete confirmation made the e2e check fail.",
       "blocked_by": "",
       "tracker": "",
       "notes": "plan.md steps 6-8"
@@ -100,8 +100,8 @@
       "steps": ["Settings > Import, pick file, (passphrase > Open file), tick extra sites, Import N users; status line"],
       "verify": "/sdlc-test e2e on popup.html; screenshots vs design/import-locked.png, import-sites.png, import-done.png",
       "verify_kind": "manual",
-      "status": "in_progress",
-      "evidence": "2026-11-23: code complete; npm test green; merge+link composition covered by links.test R8-R10. UI not rendered or smoke-driven yet.",
+      "status": "passing",
+      "evidence": "2026-11-23 /sdlc-test e2e: plain file -> site step lists 3 configured + k2uat 'new', none ticked; tick k2test -> activeByDomain then {sessions, domains}, 'Imported 3 users, skipped 1 already here. Linked all 4 to k2test.corp.com.'. Encrypted file -> passphrase step (focus in field); wrong passphrase -> 'Wrong passphrase.', 0 writes; right one -> site step. Extra site nobody is linked to keeps nobody signed in (R3); linking before the merge in applyImport made that check fail. Write error now shown in the status (b54aedd). Screenshots match import-locked/-sites/-done.",
       "blocked_by": "",
       "tracker": "",
       "notes": "plan.md steps 7-8"
@@ -113,8 +113,8 @@
       "steps": ["Settings > type a site + Enter (or This site / detected Add), tick users, Add site, link N users"],
       "verify": "/sdlc-test e2e on popup.html; screenshot vs design/add-site.png",
       "verify_kind": "manual",
-      "status": "in_progress",
-      "evidence": "2026-11-23: code complete; npm test green. Scratch fake-DOM smoke: type site + Enter opens 'Who can sign in to z.corp.com?', tick 1 -> 'Add site, link 1 user', save writes {sessions, domains} in one set, no signed-in user for z. Not rendered.",
+      "status": "passing",
+      "evidence": "2026-11-23 /sdlc-test e2e: Enter on a typed site and 'This site' both open 'Who can sign in to k2uat.corp.com?' (every stored user, none ticked); 2 ticked -> 'Add site, link 2 users' -> one {sessions, domains} write, nobody signed in to k2uat; Escape keeps the typed site; no users stored -> site added at once. Keyboard-only path works; focus returns to the site field (b54aedd). Screenshot matches add-site.png.",
       "blocked_by": "",
       "tracker": "",
       "notes": "plan.md steps 7-8"

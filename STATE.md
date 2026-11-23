@@ -52,6 +52,24 @@ None.
 
 ## Last session
 
+**2026-11-23 (test)** — `/sdlc-test` for bulk-link. **E2E without a server:** Playwright MCP
+`browser_run_code_unsafe` with `context.route("https://as.test/**", r => r.fulfill({ path }))` serves
+the repo (https so `crypto.subtle` works) and `page.addInitScript({ path: "test/e2e/chrome-stub.js" })`
+supplies `chrome.*` (seed in `sessionStorage.__seed`, writes in `window.__writes`). That code runner has
+no `fs`/`require`; files only via `download.saveAs` (Chrome stops after ~10 downloads per call).
+All 13 design PNGs compared; F006–F008 now `passing`. Fixed in `b54aedd`: action buttons hidden while
+a sub-form is open (as in the PNGs), search on its own line at <= 300px (was ~16px at 180px), focus
+back to Import… / the site field after saving, import write errors shown, search min-height 24px,
+viewport meta. 7c cut 3 tests (`faabd72`); R10 test strengthened (`e3f4582`). Step 8: every R1–R14 and
+the wiring boundary rules shown to fail on a targeted break (list in the test report). UI checker
+(`sdlc-ui-check.cjs`, config `.playwright-mcp/ui-check/ui-check.json`, minTarget 24 = WCAG 2.2 AA,
+palette allowed): 18 FAIL left, all on controls unchanged from `main` (row ✎/✕ 22px tall, chip ✕
+15x13, ⚙ glyph flagged as emoji). Gate not armed: `.sdlc/ui-check.json` / `ui-gate.json` are guarded.
+Seen, pre-existing: `mergeBackup` signs a user in on *every* configured site with nobody signed in,
+not only the file's sites; success copy says "Imported 1 users". **Pending human:** re-approve
+`plan.md` (stale); decide the 18 pre-existing UI FAILs; commit `.sdlc/gates/*.jsonl`.
+**Next action:** `/sdlc-review`.
+
 **2026-11-23 (build, session 1 continued)** — F006–F008 code complete: `popup.css` approved
 additions (`.btn-primary` text `--bg`, `.choice-row` 6px, bulk classes); `popup.html` nav icon,
 `#manage` page, `#pick-form`, `#confirm`, `#import-sites`, `#add-site-form`, "Open file";
