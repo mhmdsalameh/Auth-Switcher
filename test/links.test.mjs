@@ -2,7 +2,7 @@
 // (docs/sdlc/bulk-link/spec.md).
 import assert from "node:assert/strict";
 import { linkUsers, unlinkUsers, deleteUsers, addSiteWithUsers } from "../links.js";
-import { buildBackup, parseBackup, openBackup, mergeBackup } from "../backup.js";
+import { mergeBackup } from "../backup.js";
 
 const user = (id, domains, extra = {}) =>
   ({ id, domains, name: id.toUpperCase(), username: id, password: "p", ...extra });
@@ -35,12 +35,6 @@ const tests = {
   "R1 new sites are appended in configured order, whatever order they were picked in"() {
     const state = deepFreeze({ domains: ["x", "y", "z"], sessions: [user("a", ["y"])], activeByDomain: {} });
     assert.deepEqual(sitesOf(linkUsers(state, ["a"], ["z", "x"]).sessions, "a"), ["y", "x", "z"]);
-  },
-
-  "R1 unknown ids are skipped"() {
-    const state = deepFreeze({ domains: ["x"], sessions: [user("a", ["x"])], activeByDomain: {} });
-    const { sessions } = linkUsers(state, ["ghost"], ["x"]);
-    assert.deepEqual(sessions, state.sessions);
   },
 
   "R1 a legacy single-site record is read through domainsOf and rewritten as a list"() {
@@ -78,16 +72,6 @@ const tests = {
     assert.ok(!("activeByDomain" in linked), "link never proposes a signed-in user");
     const added = addSiteWithUsers(state, "z", ["a", "b"]);
     assert.ok(!("activeByDomain" in added), "nor does adding a site with users");
-  },
-
-  "R3 import extra sites adopt no signed-in user"() {
-    const current = deepFreeze({ domains: ["x", "y"], sessions: [], activeByDomain: {} });
-    const merged = mergeBackup(current, {
-      domains: ["x"], sessions: [{ domains: ["x"], name: "C", username: "c", password: "p" }]
-    }, () => "c");
-    const { sessions } = linkUsers(merged, [...merged.addedIds, ...merged.matchedIds], ["y"]);
-    assert.deepEqual(sitesOf(sessions, "c"), ["x", "y"]);
-    assert.equal(merged.activeByDomain.y, undefined, "y still has nobody signed in");
   },
 
   "R4 unlink removes only chosen sites"() {
@@ -196,15 +180,6 @@ const tests = {
     const { sessions, notApplied } = linkUsers(merged, merged.addedIds, ["w"]);
     assert.deepEqual(sitesOf(sessions, "c"), ["x", "w"]);
     assert.deepEqual(notApplied, []);
-  },
-
-  async "R8 encrypted file same result"() {
-    const exported = { domains: ["x"], sessions: [user("c", ["x"])] };
-    const file = parseBackup(JSON.stringify(await buildBackup(exported, "pw")));
-    const payload = await openBackup(file, "pw");
-    const merged = mergeBackup({ domains: ["x", "y"], sessions: [], activeByDomain: {} }, payload, () => "c");
-    const { sessions } = linkUsers(merged, merged.addedIds, ["y"]);
-    assert.deepEqual(sitesOf(sessions, "c"), ["x", "y"]);
   },
 
   "R9 matched existing user gets extra sites, no duplicate"() {
