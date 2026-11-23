@@ -73,7 +73,10 @@ Seen, pre-existing: `mergeBackup` signs a user in on *every* configured site wit
 not only the file's sites; success copy says "Imported 1 users". `plan.md` re-approved. No `evals/` set: skipped this cycle by the user's decision.
 **Pending human:** commit `.sdlc/gates/*.jsonl` (guarded); a real-Chrome load of the unpacked
 extension is still never done (the e2e used a `chrome` stub).
-**Next action:** `/sdlc-review`.
+**Decision (Mohammad Salameh, 2026-11-23):** no `/sdlc-review` for bulk-link — no REVIEW.md
+passes, release record or runbook for this cycle. The production gate (`npm run package`, store
+upload) still needs his authorization. **Next action:** whatever he asks; branch `feat/bulk-link`
+is not pushed or merged.
 
 **2026-11-23 (build, session 1 continued)** — F006–F008 code complete: `popup.css` approved
 additions (`.btn-primary` text `--bg`, `.choice-row` 6px, bulk classes); `popup.html` nav icon,
