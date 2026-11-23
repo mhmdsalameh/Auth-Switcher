@@ -1,0 +1,149 @@
+{
+  "project": "auth-switcher — cycle bulk-link",
+  "updated": "2026-11-23",
+  "conventions": {
+    "status": ["todo", "in_progress", "passing", "failing", "blocked"],
+    "rule": "A feature becomes 'passing' only after its verify ran and was observed to pass. Never edit or weaken a verify to make a feature pass.",
+    "verify_kind": "'command' = verify is a shell command; scripts/features-verify.ps1 runs it and a 'passing' status must match its result. 'manual' = an end-to-end check a person or browser performs; evidence is a screenshot or recorded output.",
+    "verify_shell": "Optional. 'powershell' (default) or 'bash'.",
+    "traces": "Each feature traces to spec R-IDs in docs/sdlc/bulk-link/spec.md.",
+    "tracker": "Optional. The issue key or URL."
+  },
+  "features": [
+    {
+      "id": "F001",
+      "title": "Import reports which users it added and which existing users matched",
+      "traces": ["R9", "R10"],
+      "steps": ["mergeBackup returns addedIds and matchedIds alongside added/skipped"],
+      "verify": "node test/backup.test.mjs",
+      "verify_kind": "command",
+      "status": "todo",
+      "evidence": "",
+      "blocked_by": "",
+      "tracker": "",
+      "notes": "plan.md step 1"
+    },
+    {
+      "id": "F002",
+      "title": "Pure bulk transforms: link, unlink, delete, add site with users",
+      "traces": ["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R10", "R11", "R12"],
+      "steps": ["links.js exports linkUsers, unlinkUsers, deleteUsers, addSiteWithUsers per spec contract"],
+      "verify": "node test/links.test.mjs",
+      "verify_kind": "command",
+      "status": "todo",
+      "evidence": "",
+      "blocked_by": "",
+      "tracker": "",
+      "notes": "plan.md step 2"
+    },
+    {
+      "id": "F003",
+      "title": "One ordered save: activeByDomain before sessions, one sessions write",
+      "traces": ["R7", "R14"],
+      "steps": ["storage.js writeChange writes activeByDomain first, then sessions (+ domains) in one set"],
+      "verify": "node test/storage.test.mjs",
+      "verify_kind": "command",
+      "status": "todo",
+      "evidence": "",
+      "blocked_by": "",
+      "tracker": "",
+      "notes": "plan.md step 3"
+    },
+    {
+      "id": "F004",
+      "title": "Worker sends a password only to a configured site the user is linked to",
+      "traces": ["R13"],
+      "steps": ["serves() checked in onAuthRequired and syncRules; no pinned-to-active fallback"],
+      "verify": "node test/background.test.mjs",
+      "verify_kind": "command",
+      "status": "todo",
+      "evidence": "",
+      "blocked_by": "",
+      "tracker": "",
+      "notes": "plan.md step 4"
+    },
+    {
+      "id": "F005",
+      "title": "Module boundary rules enforced in the wiring suite",
+      "traces": ["R7"],
+      "steps": ["Backup/Links pure; Links imports only backup.js; no imports of popup.js/background.js; no cycles; popup writes sessions only via writeChange"],
+      "verify": "node test/wiring.test.mjs",
+      "verify_kind": "command",
+      "status": "todo",
+      "evidence": "",
+      "blocked_by": "",
+      "tracker": "",
+      "notes": "plan.md step 5"
+    },
+    {
+      "id": "F006",
+      "title": "Manage users page: bulk link, unlink (with last-site confirmation) and delete",
+      "traces": ["R1", "R2", "R4", "R5", "R6", "R7", "R12", "R14"],
+      "steps": [
+        "Open Manage users from the nav icon",
+        "Select users, Link to sites, pick sites, save; status line shows",
+        "Select users, Unlink from sites; users left with no site trigger Confirm deletion (Delete / Keep them / Cancel)",
+        "Select users, Delete users, confirm naming every user"
+      ],
+      "verify": "/sdlc-test e2e: drive popup.html over HTTP with a chrome stub (test/e2e/), keyboard path, screenshots vs docs/sdlc/bulk-link/design/manage-*.png and confirm-*.png",
+      "verify_kind": "manual",
+      "status": "todo",
+      "evidence": "",
+      "blocked_by": "",
+      "tracker": "",
+      "notes": "plan.md steps 6-8"
+    },
+    {
+      "id": "F007",
+      "title": "Import links every imported and matched user to extra sites the tester picks",
+      "traces": ["R8", "R9", "R10"],
+      "steps": ["Settings > Import, pick file, (passphrase > Open file), tick extra sites, Import N users; status line"],
+      "verify": "/sdlc-test e2e on popup.html; screenshots vs design/import-locked.png, import-sites.png, import-done.png",
+      "verify_kind": "manual",
+      "status": "todo",
+      "evidence": "",
+      "blocked_by": "",
+      "tracker": "",
+      "notes": "plan.md steps 7-8"
+    },
+    {
+      "id": "F008",
+      "title": "Adding a site can link chosen users in the same save",
+      "traces": ["R3", "R11", "R14"],
+      "steps": ["Settings > type a site + Enter (or This site / detected Add), tick users, Add site, link N users"],
+      "verify": "/sdlc-test e2e on popup.html; screenshot vs design/add-site.png",
+      "verify_kind": "manual",
+      "status": "todo",
+      "evidence": "",
+      "blocked_by": "",
+      "tracker": "",
+      "notes": "plan.md steps 7-8"
+    },
+    {
+      "id": "F009",
+      "title": "Per-row delete, edit form and import write activeByDomain before sessions",
+      "traces": ["R7"],
+      "steps": ["Every popup.js write of sessions goes through writeChange"],
+      "verify": "node test/wiring.test.mjs",
+      "verify_kind": "command",
+      "status": "todo",
+      "evidence": "",
+      "blocked_by": "",
+      "tracker": "",
+      "notes": "plan.md step 8"
+    },
+    {
+      "id": "F010",
+      "title": "Test script, scoped commands and maps updated",
+      "traces": ["R14"],
+      "steps": ["package.json test runs links and storage suites; CLAUDE.md, architecture.md, CODEMAP.md, STATE.md updated"],
+      "verify": "npm test",
+      "verify_kind": "command",
+      "status": "todo",
+      "evidence": "",
+      "blocked_by": "",
+      "tracker": "",
+      "notes": "plan.md step 9"
+    }
+  ]
+}
