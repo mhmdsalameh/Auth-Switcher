@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bulk link mockups</title>
+  <!-- ADR 0004: mockups load the shipped stylesheet so tokens and components are the real ones. -->
+  <link rel="stylesheet" href="../../../../popup.css" />
+  <style>
+    /* ---- Mockup canvas only (not shipped) ---- */
+    html, body { min-height: 0; }
+    body.canvas { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; padding: 24px; }
+    .frame { width: 320px; background: var(--bg); border: 1px solid var(--border); }
+    .frame.narrow { width: 180px; }
+    .frame-label { font-size: 11px; color: var(--muted); margin: 0 0 6px; }
+
+    /* ---- Proposed additions to popup.css (tokens only) ---- */
+    /* WCAG 2.2 1.4.3: white on --accent is 2.75:1; --bg on --accent is 6.05:1 (hover 6.73:1). */
+    .btn-primary { color: var(--bg); }
+    /* WCAG 2.2 2.5.8: rows were 23px tall and touching; 6px padding gives 25px. */
+    .choice-row { padding: 6px; }
+
+    .btn:disabled { color: var(--muted); border-color: var(--surface-hi); cursor: default; }
+    .btn:disabled:hover { background: var(--surface); }
+    .btn-primary:disabled { background: var(--surface); border-color: var(--border); }
+
+    .nav-icon svg { display: block; }
+
+    .pick-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .pick-head .choice-row { padding: 4px 6px 4px 0; }
+    .pick-head .choice-row:hover { background: none; }
+    .pick-count { margin-left: auto; font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+    /* Grid, not flex: the site summary drops under the name, so nothing collides at 180px. */
+    .pick-row {
+      display: grid;
+      grid-template-columns: 14px 8px minmax(0, 1fr);
+      align-items: center;
+      column-gap: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      margin-bottom: 4px;
+      padding: 7px 8px;
+      cursor: pointer;
+    }
+    .pick-row:hover { background: var(--surface-hi); }
+    .pick-row .choice-box, .pick-row .dot { grid-row: span 2; }
+    .pick-row .row-meta { grid-column: 3; }
+    .pick-row .row-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pick-sites {
+      grid-column: 3;
+      min-width: 0;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .bulk-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 11px; }
+
+    .choice-list.open-list { max-height: 160px; margin: 0 0 8px; }
+    .choice-user { display: block; font-family: var(--mono); font-size: 10px; color: var(--muted); }
+
+    .confirm-list { list-style: none; margin: 6px 0 8px; padding: 0; }
+    .confirm-list li { display: flex; gap: 6px; align-items: baseline; padding: 2px 0; min-width: 0; }
+    .confirm-list .row-name { flex: none; color: var(--text); }
+    .confirm-list .row-user { min-width: 0; }
+    .form-actions.wrap { flex-wrap: wrap; }
+  </style>
+</head>
+<body class="canvas">
+
+<!-- Shared inline icon (line, currentColor) for the nav. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-users" viewBox="0 0 16 16">
+    <circle cx="6" cy="5" r="2.5" fill="none" stroke="currentColor" stroke-width="1.3"/>
+    <path d="M1.5 13.5c.4-2.4 2.2-3.8 4.5-3.8s4.1 1.4 4.5 3.8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+    <path d="M10.5 3a2.4 2.4 0 0 1 0 4.6M12.2 9.9c1.3.5 2.1 1.7 2.3 3.6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+  </symbol>
+</svg>
+
+<!-- ============ 0. Users page: new nav entry ============ -->
+<div>
+  <p class="frame-label">users-nav — Users page, new Manage users icon</p>
+  <div class="frame" id="users-nav">
+    <nav class="tabs">
+      <select class="domain-select" aria-label="Site"><option>k2.corp.com</option></select>
+      <button class="icon-btn nav-icon" title="Manage users" aria-label="Manage users"><svg width="14" height="14"><use href="#i-users"/></svg></button>
+      <button class="icon-btn" title="Settings" aria-label="Settings">&#9881;</button>
+      <button class="icon-btn" id="panel-close" title="Close panel" aria-label="Close panel">&#10005;</button>
+    </nav>
+    <div class="content">
+      <section class="active" style="--user:#e0a33e">
+        <div class="active-head"><span class="label">Signed in as</span><span class="badge">2 sites</span></div>
+        <div class="active-name">Approver</div>
+        <div class="active-user">CORP\k2approver</div>
+      </section>
+      <div class="rack-head"><span class="label">Switch to</span></div>
+      <ul class="rows">
+        <li class="row"><button class="row-main"><span class="dot" style="background:#4a9eff"></span><span class="row-meta"><span class="row-name">Requester</span><span class="row-user">CORP\k2requester</span></span></button></li>
+        <li class="row"><button class="row-main"><span class="dot" style="background:#5bbd7a"></span><span class="row-meta"><span class="row-name">Admin</span><span class="row-user">CORP\k2admin</span></span></button></li>
+      </ul>
+      <button class="btn btn-wide">Add user</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 1. Manage users: none selected ============ -->
+<div>
+  <p class="frame-label">manage-none — Manage users, nothing selected</p>
+  <div class="frame" id="manage-none">
+    <nav class="tabs">
+      <span class="nav-title">Manage users</span>
+      <button class="icon-btn" title="Back" aria-label="Back">&#8592;</button>
+      <button class="icon-btn" id="panel-close" title="Close panel" aria-label="Close panel">&#10005;</button>
+    </nav>
+    <div class="content">
+      <div class="pick-head">
+        <label class="choice-item choice-row"><input type="checkbox" /><span class="choice-box"></span><span>Select all</span></label>
+        <span class="pick-count">0 of 5 selected</span>
+      </div>
+      <ul class="rows">
+        <li><label class="choice-item pick-row"><input type="checkbox" /><span class="choice-box"></span><span class="dot" style="background:#e0a33e"></span><span class="row-meta"><span class="row-name">Approver</span><span class="row-user">CORP\k2approver</span></span><span class="pick-sites" title="k2.corp.com, k2test.corp.com">k2.corp.com +1</span></label></li>
+        <li><label class="choice-item pick-row"><input type="checkbox" /><span class="choice-box"></span><span class="dot" style="background:#4a9eff"></span><span class="row-meta"><span class="row-name">Requester</span><span class="row-user">CORP\k2requester</span></span><span class="pick-sites">k2.corp.com</span></label></li>
+        <li><label class="choice-item pick-row"><input type="checkbox" /><span class="choice-box"></span><span class="dot" style="background:#5bbd7a"></span><span class="row-meta"><span class="row-name">Admin</span><span class="row-user">CORP\k2admin</span></span><span class="pick-sites">k2.corp.com</span></label></li>
+        <li><label class="choice-item pick-row"><input type="checkbox" /><span class="choice-box"></span><span class="dot" style="background:#d47ba8"></span><span class="row-meta"><span class="row-name">Finance lead</span><span class="row-user">CORP\fin.lead</span></span><span class="pick-sites">k2test.corp.com</span></label></li>
+        <li><label class="choice-item pick-row"><input type="checkbox" /><span class="choice-box"></span><span class="dot" style="background:#a98cf0"></span><span class="row-meta"><span class="row-name">Viewer</span><span class="row-user">CORP\k2viewer</span></span><span class="pick-sites">k2dev.corp.com</span></label></li>
+      </ul>
+      <div class="bulk-actions">
+        <button class="btn" disabled>Link to sites</button>
+        <button class="btn" disabled>Unlink from sites</button>
+        <button class="btn" disabled>Delete users</button>
+      </div>
+      <p class="hint">Select users to link, unlink or delete them together.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 2. Manage users: three selected, link sites open ============ -->
+<div>
+  <p class="frame-label">manage-link — 3 selected, choosing sites to link</p>
+  <div class="frame" id="manage-link">
+    <nav class="tabs">
+      <span class="nav-title">Manage users</span>
+      <button class="icon-btn" title="Back" aria-label="Back">&#8592;</button>
+      <button class="icon-btn" id="panel-close" title="Close panel" aria-label="Close panel">&#10005;</button>
+    </nav>
+    <div class="content">
+      <div class="pick-head">
+        <label class="choice-item choice-row"><input type="checkbox" /><span class="choice-box"></span><span>Select all</span></label>
+        <span class="pick-count">3 of 5 selected</span>
+      </div>
+      <ul class="rows">
+        <li><label class="choice-item pick-row"><input type="checkbox" checked /><span class="choice-box"></span><span class="dot" style="background:#e0a33e"></span><span class="row-meta"><span class="row-name">Approver</span><span class="row-user">CORP\k2approver</span></span><span class="pick-sites">k2.corp.com +1</span></label></li>
+        <li><label class="choice-item pick-row"><input type="checkbox" checked /><span class="choice-box"></span><span class="dot" style="background:#4a9eff"></span><span class="row-meta"><span class="row-name">Requester</span><span class="row-user">CORP\k2requester</span></span><span class="pick-sites">k2.corp.com</span></label></li>
+        <li><label class="choice-item pick-row"><input type="checkbox" checked /><span class="choice-box"></span><span class="dot" style="background:#5bbd7a"></span><span class="row-meta"><span class="row-name">Admin</span><span class="row-user">CORP\k2admin</span></span><span class="pick-sites">k2.corp.com</span></label></li>
+        <li><label class="choice-item pick-row"><input type="checkbox" /><span class="choice-box"></span><span class="dot" style="background:#d47ba8"></span><span class="row-meta"><span class="row-name">Finance lead</span><span class="row-user">CORP\fin.lead</span></span><span class="pick-sites">k2test.corp.com</span></label></li>
+        <li><label class="choice-item pick-row"><input type="checkbox" /><span class="choice-box"></span><span class="dot" style="background:#a98cf0"></span><span class="row-meta"><span class="row-name">Viewer</span><span class="row-user">CORP\k2viewer</span></span><span class="pick-sites">k2dev.corp.com</span></label></li>
+      </ul>
+      <form class="box">
+        <div class="label" id="link-title">Link 3 users to</div>
+        <ul class="choice-list open-list" aria-labelledby="link-title">
+          <li class="choice-item"><label class="choice-row"><input type="checkbox" /><span class="choice-box"></span><span class="choice-name">k2.corp.com</span></label></li>
+          <li class="choice-item"><label class="choice-row"><input type="checkbox" checked /><span class="choice-box"></span><span class="choice-name">k2test.corp.com</span></label></li>
+          <li class="choice-item"><label class="choice-row"><input type="checkbox" checked /><span class="choice-box"></span><span class="choice-name">k2dev.corp.com</span></label></li>
+        </ul>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Link 3 users to 2 sites</button>
+          <button type="button" class="btn">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 3. Unlink: no site chosen yet ============ -->
+<div>
+  <p class="frame-label">manage-unlink-empty — unlink, no site chosen</p>
+  <div class="frame" id="manage-unlink-empty">
+    <nav class="tabs">
+      <span class="nav-title">Manage users</span>
+      <button class="icon-btn" title="Back" aria-label="Back">&#8592;</button>
+      <button class="icon-btn" id="panel-close" title="Close panel" aria-label="Close panel">&#10005;</button>
+    </nav>
+    <div class="content">
+      <div class="pick-head">
+        <label class="choice-item choice-row"><input type="checkbox" /><span class="choice-box"></span><span>Select all</span></label>
+        <span class="pick-count">2 of 5 selected</span>
+      </div>
+      <form class="box">
+        <div class="label" id="unlink-title">Unlink 2 users from</div>
+        <ul class="choice-list open-list" aria-labelledby="unlink-title">
+          <li class="choice-item"><label class="choice-row"><input type="checkbox" /><span class="choice-box"></span><span class="choice-name">k2.corp.com</span></label></li>
+          <li class="choice-item"><label class="choice-row"><input type="checkbox" /><span class="choice-box"></span><span class="choice-name">k2test.corp.com</span></label></li>
+          <li class="choice-item"><label class="choice-row"><input type="checkbox" /><span class="choice-box"></span><span class="choice-name">k2dev.corp.com</span></label></li>
+        </ul>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary" disabled>Pick at least one site</button>
+          <button type="button" class="btn">Cancel</button>
+        </div>
+      </form>
+      <p class="hint">The user list stays above this form; scrolled out of view here.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 4. Unlink would leave users with no site ============ -->
+<div>
+  <p class="frame-label">confirm-last-site — unlink leaves users with no site</p>
+  <div class="frame" id="confirm-last-site">
+    <nav class="tabs">
+      <span class="nav-title">Manage users</span>
+      <button class="icon-btn" title="Back" aria-label="Back">&#8592;</button>
+      <button class="icon-btn" id="panel-close" title="Close panel" aria-label="Close panel">&#10005;</button>
+    </nav>
+    <div class="content">
+      <section class="msg msg-warn" role="alertdialog" aria-labelledby="cls-title">
+        <strong id="cls-title">2 users would have no site left</strong>
+        <div>Unlinking k2.corp.com removes their last site. Deleted users cannot be restored, except from an export.</div>
+        <ul class="confirm-list">
+          <li><span class="row-name">Requester</span><span class="row-user">CORP\k2requester</span></li>
+          <li><span class="row-name">Admin</span><span class="row-user">CORP\k2admin</span></li>
+        </ul>
+        <div class="form-actions wrap">
+          <button class="btn">Delete 2 users</button>
+          <button class="btn btn-primary">Keep them</button>
+          <button class="btn">Cancel</button>
+        </div>
+      </section>
+      <p class="hint">Keep them: Approver is still unlinked from k2.corp.com; Requester and Admin stay as they are.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 5. Bulk delete confirmation ============ -->
+<div>
+  <p class="frame-label">confirm-delete — delete selected users</p>
+  <div class="frame" id="confirm-delete">
+    <nav class="tabs">
+      <span class="nav-title">Manage users</span>
+      <button class="icon-btn" title="Back" aria-label="Back">&#8592;</button>
+      <button class="icon-btn" id="panel-close" title="Close panel" aria-label="Close panel">&#10005;</button>
+    </nav>
+    <div class="content">
+      <section class="msg msg-warn" role="alertdialog" aria-labelledby="cd-title">
+        <strong id="cd-title">Delete 2 users?</strong>
+        <div>They are removed from every site. This cannot be undone, except from an export.</div>
+        <ul class="confirm-list">
+          <li><span class="row-name">Finance lead</span><span class="row-user">CORP\fin.lead</span></li>
+          <li><span class="row-name">Viewer</span><span class="row-user">CORP\k2viewer</span></li>
+        </ul>
+        <div class="form-actions wrap">
+          <button class="btn">Delete 2 users</button>
+          <button class="btn btn-primary">Cancel</button>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 6. Result + no-results + empty ============ -->
+<div>
+  <p class="frame-label">manage-result — after a save, search with no match</p>
+  <div class="frame" id="manage-result">
+    <nav class="tabs">
+      <span class="nav-title">Manage users</span>
+      <button class="icon-btn" title="Back" aria-label="Back">&#8592;</button>
+      <button class="icon-btn" id="panel-close" title="Close panel" aria-label="Close panel">&#10005;</button>
+    </nav>
+    <div class="content">
+      <p class="msg" role="status">Unlinked 1 user from k2.corp.com. Deleted 2 users.</p>
+      <div class="pick-head">
+        <label class="choice-item choice-row"><input type="checkbox" /><span class="choice-box"></span><span>Select all shown</span></label>
+        <input type="search" class="user-search" value="qa" aria-label="Search users" />
+      </div>
+      <ul class="rows"><li class="rows-empty">No users match "qa".</li></ul>
+      <div class="bulk-actions">
+        <button class="btn" disabled>Link to sites</button>
+        <button class="btn" disabled>Unlink from sites</button>
+        <button class="btn" disabled>Delete users</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div>
+  <p class="frame-label">manage-empty — no users with a site</p>
+  <div class="frame" id="manage-empty">
+    <nav class="tabs">
+      <span class="nav-title">Manage users</span>
+      <button class="icon-btn" title="Back" aria-label="Back">&#8592;</button>
+      <button class="icon-btn" id="panel-close" title="Close panel" aria-label="Close panel">&#10005;</button>
+    </nav>
+    <div class="content">
+      <ul class="rows"><li class="rows-empty">No users yet. Add one from the Users page, or import a backup in Settings.</li></ul>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 7. Import with extra sites ============ -->
+<div>
+  <p class="frame-label">import-locked — encrypted file, passphrase first</p>
+  <div class="frame" id="import-locked">
+    <nav class="tabs">
+      <span class="nav-title">Settings</span>
+      <button class="icon-btn" title="Back" aria-label="Back">&#8592;</button>
+      <button class="icon-btn" id="panel-close" title="Close panel" aria-label="Close panel">&#10005;</button>
+    </nav>
+    <div class="content">
+      <section class="box">
+        <div class="label">Backup</div>
+        <div class="form-actions">
+          <button class="btn">Export…</button>
+          <button class="btn">Import…</button>
+        </div>
+        <form class="sub-form">
+          <div class="pw"><input type="password" placeholder="Passphrase for this file" aria-label="Passphrase for this file" /></div>
+          <div class="form-actions">
+            <button class="btn btn-primary">Open file</button>
+            <button type="button" class="btn">Cancel</button>
+          </div>
+        </form>
+        <p class="hint">This backup is encrypted.</p>
+      </section>
+    </div>
+  </div>
+</div>
+
+<div>
+  <p class="frame-label">import-sites — file open, extra sites</p>
+  <div class="frame" id="import-sites">
+    <nav class="tabs">
+      <span class="nav-title">Settings</span>
+      <button class="icon-btn" title="Back" aria-label="Back">&#8592;</button>
+      <button class="icon-btn" id="panel-close" title="Close panel" aria-label="Close panel">&#10005;</button>
+    </nav>
+    <div class="content">
+      <section class="box">
+        <div class="label">Backup</div>
+        <div class="form-actions">
+          <button class="btn">Export…</button>
+          <button class="btn">Import…</button>
+        </div>
+        <form class="sub-form">
+          <div class="label" id="imp-title">4 users in this file. Also link them to</div>
+          <ul class="choice-list open-list" aria-labelledby="imp-title">
+            <li class="choice-item"><label class="choice-row"><input type="checkbox" /><span class="choice-box"></span><span class="choice-name">k2.corp.com</span></label></li>
+            <li class="choice-item"><label class="choice-row"><input type="checkbox" checked /><span class="choice-box"></span><span class="choice-name">k2test.corp.com</span></label></li>
+            <li class="choice-item"><label class="choice-row"><input type="checkbox" /><span class="choice-box"></span><span class="choice-name">k2dev.corp.com</span></label></li>
+            <li class="choice-item"><label class="choice-row"><input type="checkbox" /><span class="choice-box"></span><span class="choice-name">k2uat.corp.com</span><span class="badge">new</span></label></li>
+          </ul>
+          <div class="form-actions">
+            <button class="btn btn-primary">Import 4 users</button>
+            <button type="button" class="btn">Cancel</button>
+          </div>
+        </form>
+        <p class="hint">Optional. Users already here that match the file get these sites too.</p>
+      </section>
+    </div>
+  </div>
+</div>
+
+<div>
+  <p class="frame-label">import-done — success</p>
+  <div class="frame" id="import-done">
+    <nav class="tabs">
+      <span class="nav-title">Settings</span>
+      <button class="icon-btn" title="Back" aria-label="Back">&#8592;</button>
+      <button class="icon-btn" id="panel-close" title="Close panel" aria-label="Close panel">&#10005;</button>
+    </nav>
+    <div class="content">
+      <section class="box">
+        <div class="label">Backup</div>
+        <div class="form-actions">
+          <button class="btn">Export…</button>
+          <button class="btn">Import…</button>
+        </div>
+        <p class="hint" role="status">Imported 3 users, skipped 1 already here. Linked all 4 to k2test.corp.com.</p>
+      </section>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 8. Add site with users ============ -->
+<div>
+  <p class="frame-label">add-site — new site, choose who can sign in</p>
+  <div class="frame" id="add-site">
+    <nav class="tabs">
+      <span class="nav-title">Settings</span>
+      <button class="icon-btn" title="Back" aria-label="Back">&#8592;</button>
+      <button class="icon-btn" id="panel-close" title="Close panel" aria-label="Close panel">&#10005;</button>
+    </nav>
+    <div class="content">
+      <section class="box">
+        <label for="m-domain">Site domains</label>
+        <ul class="chips">
+          <li class="chip">k2.corp.com<button class="chip-remove" aria-label="Remove k2.corp.com">&#10005;</button></li>
+          <li class="chip">k2test.corp.com<button class="chip-remove" aria-label="Remove k2test.corp.com">&#10005;</button></li>
+        </ul>
+        <div class="domain-entry">
+          <input type="text" id="m-domain" value="k2uat.corp.com" />
+          <button type="button" class="btn">This site</button>
+        </div>
+        <form class="sub-form">
+          <div class="label" id="as-title">Who can sign in to k2uat.corp.com?</div>
+          <ul class="choice-list open-list" aria-labelledby="as-title">
+            <li class="choice-item"><label class="choice-row"><input type="checkbox" checked /><span class="choice-box"></span><span class="row-meta"><span class="row-name">Approver</span><span class="choice-user">CORP\k2approver</span></span></label></li>
+            <li class="choice-item"><label class="choice-row"><input type="checkbox" checked /><span class="choice-box"></span><span class="row-meta"><span class="row-name">Requester</span><span class="choice-user">CORP\k2requester</span></span></label></li>
+            <li class="choice-item"><label class="choice-row"><input type="checkbox" /><span class="choice-box"></span><span class="row-meta"><span class="row-name">Admin</span><span class="choice-user">CORP\k2admin</span></span></label></li>
+          </ul>
+          <div class="form-actions">
+            <button class="btn btn-primary">Add site, link 2 users</button>
+            <button type="button" class="btn">Cancel</button>
+          </div>
+        </form>
+        <p class="hint">Nobody is signed in to the new site until you pick a user.</p>
+      </section>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 9. Narrow (180px under zoom) ============ -->
+<div>
+  <p class="frame-label">manage-narrow — 180px (page zoom)</p>
+  <div class="frame narrow" id="manage-narrow">
+    <nav class="tabs">
+      <span class="nav-title">Manage users</span>
+      <button class="icon-btn" title="Back" aria-label="Back">&#8592;</button>
+      <button class="icon-btn" id="panel-close" title="Close panel" aria-label="Close panel">&#10005;</button>
+    </nav>
+    <div class="content">
+      <div class="pick-head">
+        <label class="choice-item choice-row"><input type="checkbox" /><span class="choice-box"></span><span>Select all</span></label>
+        <span class="pick-count">1 of 5 selected</span>
+      </div>
+      <ul class="rows">
+        <li><label class="choice-item pick-row"><input type="checkbox" checked /><span class="choice-box"></span><span class="dot" style="background:#e0a33e"></span><span class="row-meta"><span class="row-name">Approver</span><span class="row-user">CORP\k2approver</span></span><span class="pick-sites">k2.corp.com +1</span></label></li>
+        <li><label class="choice-item pick-row"><input type="checkbox" /><span class="choice-box"></span><span class="dot" style="background:#4a9eff"></span><span class="row-meta"><span class="row-name">Finance lead</span><span class="row-user">CORP\fin.lead</span></span><span class="pick-sites">k2test.corp.com</span></label></li>
+      </ul>
+      <div class="bulk-actions">
+        <button class="btn">Link to sites</button>
+        <button class="btn">Unlink from sites</button>
+        <button class="btn">Delete users</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
