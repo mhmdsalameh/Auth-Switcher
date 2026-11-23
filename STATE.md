@@ -52,6 +52,19 @@ None.
 
 ## Last session
 
+**2026-11-23 (build, session 1 continued)** — F006–F008 code complete: `popup.css` approved
+additions (`.btn-primary` text `--bg`, `.choice-row` 6px, bulk classes); `popup.html` nav icon,
+`#manage` page, `#pick-form`, `#confirm`, `#import-sites`, `#add-site-form`, "Open file";
+`popup.js` Manage users (selection, search ≥ 5, link / unlink + last-site confirmation / delete),
+import extra-site step, "Who can sign in?" for new sites. F010 done (`CODEMAP.md`). `npm test`
+green. **Not rendered:** starting a local HTTP server for Playwright was denied by the auto-mode
+classifier, so F006–F008 stay `in_progress`. A scratch fake-DOM run of `popup.js` (not a UI check)
+drove unlink → Keep them, bulk delete and add-site: write order and statuses matched the spec.
+**Next action:** `/sdlc-test` — needs a way to serve the repo over HTTP (user to allow a local
+static server, or load the unpacked extension in Chrome) to run the e2e + screenshot comparison
+against `docs/sdlc/bulk-link/design/*.png`; then mutation checks (step 8) incl. the new wiring
+purity / cycle rules. `plan.md` still needs re-approval (stale).
+
 **2026-11-23 (build, session 1)** — `/sdlc-plan` for bulk-link: `plan.md` approved by Mohammad
 Salameh (`a46bd2f`, gate recorded); multi-session build with `FEATURES.json` (F001–F010) and
 `init.ps1` (smoke test = `npm test`). Landed: F001 `mergeBackup` `addedIds`/`matchedIds`

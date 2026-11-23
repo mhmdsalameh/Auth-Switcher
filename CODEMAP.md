@@ -113,6 +113,29 @@ The trade-off: after *cancelling* a form, `tabDomain` can be one tab-switch stal
 next tab event or mutation. Re-detecting on cancel was not worth an extra `tabs.query` on a
 path the user is already leaving.
 
+### Bulk links (cycle bulk-link)
+
+> Link, unlink and delete many users at once; extra sites at import; users for a new site.
+> `links.js` computes the next state (pure, ADR 0003); the Panel saves it once through
+> `writeChange()`, which clears lost signed-in users before writing `sessions` (architecture §4).
+
+| File | Line | What it is |
+|------|------|------------|
+| `links.js` | 20 | `linkUsers()` — adds configured sites only; reports the rest in `notApplied` |
+| `links.js` | 38 | `unlinkUsers()` — returns `orphans` (no live site left); `deleteOrphans` deletes or keeps them |
+| `links.js` | 68 | `deleteUsers()` — removes users and every `activeByDomain` entry naming them |
+| `links.js` | 79 | `addSiteWithUsers()` — configures a site and links chosen users; nobody signed in |
+| `storage.js` | 60 | `writeChange()` — the Panel's only save path for `sessions`/`domains`/`activeByDomain` |
+| `background.js` | 85 | `serves()` — credential boundary: site configured AND in the user's sites (R13) |
+| `popup.js` | 741 | `renderManage()` — Manage users page; `buildPickRow()` (713) one selectable row |
+| `popup.js` | 783 | `renderManageSummary()` — count / select-all / buttons only, so a tick keeps focus |
+| `popup.js` | 1162 | `openImportSites()` — import step for extra sites; `applyImport()` (1297) merges then links |
+| `popup.js` | 207 | `openAddSite()` — "Who can sign in?" before a new site is saved |
+
+`test/wiring.test.mjs` fails the build if `popup.js` writes `sessions`, `domains` or
+`activeByDomain` other than through `writeChange()`, if `backup.js`/`links.js` touch `chrome.`,
+the DOM or `fetch`, if `links.js` imports anything but `./backup.js`, or on an import cycle.
+
 ### Backup (export / import)
 
 > Encrypted transfer of users and domains between machines.
@@ -219,7 +242,10 @@ adding it there; `test/wiring.test.mjs` fails if the popup sends something unhan
 
 ### Popup → backup module
 
-`popup.js:1` imports `buildBackup`, `parseBackup`, `openBackup`, `mergeBackup`.
+`popup.js:1` imports `buildBackup`, `parseBackup`, `openBackup`, `mergeBackup`, plus
+`linkUsers`, `unlinkUsers`, `deleteUsers`, `addSiteWithUsers` from `links.js`. `mergeBackup`
+also returns `addedIds` / `matchedIds` so import can link extra sites without re-implementing
+the duplicate rule.
 `backup.js` deliberately touches neither DOM nor `chrome.*` so it stays testable in Node.
 
 ---
@@ -341,4 +367,5 @@ adding it there; `test/wiring.test.mjs` fails if the popup sends something unhan
 - `popup.css` — presentation only; `test/wiring.test.mjs` verifies every class used in
   markup or JS actually has a rule.
 - `test/*.mjs` — the suites themselves. `background.test.mjs` runs `background.js` in a
-  `node:vm` with stubbed `chrome.*` APIs.
+  `node:vm` with stubbed `chrome.*` APIs; `links.test.mjs` calls `links.js` directly;
+  `storage.test.mjs` imports `storage.js` fresh per instance under a `chrome` stub.

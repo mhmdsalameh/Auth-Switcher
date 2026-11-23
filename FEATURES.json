@@ -87,8 +87,8 @@
       ],
       "verify": "/sdlc-test e2e: drive popup.html over HTTP with a chrome stub (test/e2e/), keyboard path, screenshots vs docs/sdlc/bulk-link/design/manage-*.png and confirm-*.png",
       "verify_kind": "manual",
-      "status": "todo",
-      "evidence": "",
+      "status": "in_progress",
+      "evidence": "2026-11-23: code complete; npm test green. Not rendered: local HTTP server blocked by the auto-mode classifier. Scratch fake-DOM smoke (not a UI check) ran select all -> unlink x -> Keep them (writes activeByDomain then sessions; status 'Unlinked 1 user from x.corp.com.') and bulk delete (both active entries cleared); stale-only user not listed.",
       "blocked_by": "",
       "tracker": "",
       "notes": "plan.md steps 6-8"
@@ -100,8 +100,8 @@
       "steps": ["Settings > Import, pick file, (passphrase > Open file), tick extra sites, Import N users; status line"],
       "verify": "/sdlc-test e2e on popup.html; screenshots vs design/import-locked.png, import-sites.png, import-done.png",
       "verify_kind": "manual",
-      "status": "todo",
-      "evidence": "",
+      "status": "in_progress",
+      "evidence": "2026-11-23: code complete; npm test green; merge+link composition covered by links.test R8-R10. UI not rendered or smoke-driven yet.",
       "blocked_by": "",
       "tracker": "",
       "notes": "plan.md steps 7-8"
@@ -113,8 +113,8 @@
       "steps": ["Settings > type a site + Enter (or This site / detected Add), tick users, Add site, link N users"],
       "verify": "/sdlc-test e2e on popup.html; screenshot vs design/add-site.png",
       "verify_kind": "manual",
-      "status": "todo",
-      "evidence": "",
+      "status": "in_progress",
+      "evidence": "2026-11-23: code complete; npm test green. Scratch fake-DOM smoke: type site + Enter opens 'Who can sign in to z.corp.com?', tick 1 -> 'Add site, link 1 user', save writes {sessions, domains} in one set, no signed-in user for z. Not rendered.",
       "blocked_by": "",
       "tracker": "",
       "notes": "plan.md steps 7-8"
@@ -139,8 +139,8 @@
       "steps": ["package.json test runs links and storage suites; CLAUDE.md, architecture.md, CODEMAP.md, STATE.md updated"],
       "verify": "npm test",
       "verify_kind": "command",
-      "status": "todo",
-      "evidence": "",
+      "status": "passing",
+      "evidence": "2026-11-23: npm test -> wiring PASS (83 DOM ids, 61 classes), backup 16, links 25, storage 3, background 28",
       "blocked_by": "",
       "tracker": "",
       "notes": "plan.md step 9"
