@@ -53,6 +53,18 @@ export async function writeActiveByDomain(activeByDomain) {
   await INSTANCE_AREA.set({ activeByDomain });
 }
 
+// The Panel's one way to save a change to users or sites (architecture §4). activeByDomain goes
+// first: if the second write fails, a site is left with nobody signed in rather than with a
+// signed-in user who has lost the right to it. sessions and domains share one set() so a save
+// writes sessions exactly once (spec R7, R14).
+export async function writeChange({ activeByDomain, sessions, domains }) {
+  if (activeByDomain !== undefined) await writeActiveByDomain(activeByDomain);
+  const config = {};
+  if (sessions !== undefined) config.sessions = sessions;
+  if (domains !== undefined) config.domains = domains;
+  if (Object.keys(config).length) await chrome.storage.local.set(config);
+}
+
 export async function readInstanceState() {
   return INSTANCE_AREA.get(INSTANCE_DEFAULTS);
 }

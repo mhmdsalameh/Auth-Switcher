@@ -43,8 +43,8 @@
       "steps": ["storage.js writeChange writes activeByDomain first, then sessions (+ domains) in one set"],
       "verify": "node test/storage.test.mjs",
       "verify_kind": "command",
-      "status": "todo",
-      "evidence": "",
+      "status": "passing",
+      "evidence": "2026-11-23: node test/storage.test.mjs -> All 3 passing (3 failing before writeChange existed)",
       "blocked_by": "",
       "tracker": "",
       "notes": "plan.md step 3"
