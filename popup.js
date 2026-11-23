@@ -250,6 +250,7 @@ $("#add-site-form").addEventListener("submit", async (e) => {
   if (normalizeDomain(domainInput.value) === site) domainInput.value = "";
   await writeChange({ domains, sessions });
   await selectDomain(site);
+  domainInput.focus();
 });
 
 // Cancel keeps the typed site in the field.
@@ -755,7 +756,6 @@ function renderManage() {
   if (search.value !== manageQuery) search.value = manageQuery;
 
   $("#manage-head").hidden = empty;
-  $("#bulk-actions").hidden = empty;
 
   const list = $("#manage-list");
   list.textContent = "";
@@ -793,6 +793,7 @@ function renderManageSummary() {
   all.disabled = !shown.length;
 
   const busy = pickMode || confirmMode;
+  $("#bulk-actions").hidden = !users.length || !!busy;
   for (const id of ["#bulk-link", "#bulk-unlink", "#bulk-delete"]) $(id).disabled = !n || !!busy;
   $("#manage-hint").hidden = !users.length || n > 0;
   if (pickMode) renderPickSummary();
@@ -1198,7 +1199,12 @@ $("#import-sites").addEventListener("submit", async (e) => {
   const extra = importPreview.domains.filter((d) => importSites.has(d));
   importPayload = null;
   renderImportSites();
-  await applyImport(payload, extra);
+  try {
+    await applyImport(payload, extra);
+  } catch (err) {
+    backupStatus(String(err.message ?? err), true);
+  }
+  $("#import-btn").focus();
 });
 
 function cancelImportSites() {

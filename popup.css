@@ -129,6 +129,7 @@ p.hint { margin: 5px 0 0; }
   font: inherit;
   font-size: 11px;
   padding: 3px 6px;
+  min-height: 24px;
 }
 .user-search:focus { outline: none; border-color: var(--accent); }
 .user-search::placeholder { color: var(--muted); }
@@ -542,6 +543,11 @@ p.hint { margin: 5px 0 0; }
 .pick-head .choice-row:hover { background: none; }
 .pick-head .user-search { flex: 1; min-width: 0; }
 .pick-count { margin-left: auto; font-size: 11px; color: var(--muted); white-space: nowrap; }
+/* Three items in one line leave the search a few pixels wide under zoom; give it its own line. */
+@media (max-width: 300px) {
+  .pick-head { flex-wrap: wrap; }
+  .pick-head .user-search { order: 1; flex-basis: 100%; }
+}
 
 /* Grid, not flex: the site summary drops under the name, so nothing collides at 180px. */
 .pick-row {
